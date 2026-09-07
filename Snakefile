@@ -1,0 +1,217 @@
+# =============================================================================
+# RAPID — Snakefile   (mode: auto)
+# RNA Annotation Primer Identification and Design
+#
+# Single RNA-seq sample. The downstream part (gene selection → primer design →
+# summary) lives in common.smk and is shared with track.smk.
+# =============================================================================
+
+from pathlib import Path
+
+# ── Config ────────────────────────────────────────────────────────────────────
+OUT         = config["output_dir"]
+GENOME      = config["genome"]
+RNA_R1      = config["rna_r1"]
+RNA_R2      = config.get("rna_r2")
+PAIRED      = config["paired"]
+ANNOT_IN    = config.get("annotation")
+RUN_BRAKER  = config["run_braker"]
+THREADS     = config["threads"]
+EX_MODE     = config.get("ex_mode", "max")   # max/+, mid, min, or integer
+PRODUCT_MIN = config.get("primer_product_min", 100)
+PRODUCT_MAX = config.get("primer_product_max", 200)
+
+# workflow.basedir = the directory containing this Snakefile = scripts/
+SCRIPTS_DIR = Path(workflow.basedir)
+R_SCRIPT    = str(SCRIPTS_DIR / "01_expression_filter_and_primer3_prep.R")
+
+# Annotation format, detected once from the ORIGINAL input path (the symlink is
+# always .gtf/.gff*). Braker output is always GTF. Used both for splice-site
+# extraction (GTF only) and for the featureCounts attribute/format flags.
+_annot_source = (ANNOT_IN if ANNOT_IN else "").lower()
+IS_GTF        = (not ANNOT_IN) or _annot_source.endswith(".gtf")
+
+# Reproducible HISAT2: aligning spliced reads uses splice sites discovered
+# on-the-fly by earlier reads, and with multiple threads the discovery order
+# varies run-to-run — giving slightly different counts (and, at the selection
+# boundary, different primers). Supplying the known splice sites from the
+# annotation and disabling the dynamic (temp) table makes alignment fully
+# deterministic across runs and thread counts, with no loss of sensitivity.
+# hisat2_extract_splice_sites.py only reads GTF, so this is applied for GTF
+# annotations (and Braker output, which is GTF). For GFF3, alignment falls
+# back to the default behaviour (convert to GTF for deterministic runs).
+if IS_GTF:
+    _SS_FILE  = f"{OUT}/hisat2_index/splicesites.txt"
+    _SS_INPUT = _SS_FILE
+    _SS_FLAGS = f"--known-splicesite-infile {_SS_FILE} --no-temp-splicesite"
+else:
+    _SS_INPUT = []
+    _SS_FLAGS = ""
+
+
+# ── Final targets ─────────────────────────────────────────────────────────────
+rule all:
+    input:
+        f"{OUT}/primer3/results/best_primers.txt",
+        f"{OUT}/primer3/results/primers_summary.tsv"
+
+
+# =============================================================================
+# STEP 1 — Annotation: Braker3 OR link provided annotation
+# =============================================================================
+if RUN_BRAKER:
+    rule braker3:
+        input:
+            genome = GENOME,
+            rna_r1 = RNA_R1,
+            rna_r2 = RNA_R2 if PAIRED else [],
+        output:
+            annot  = f"{OUT}/braker3/braker.gtf",
+        log:    f"{OUT}/logs/braker3.log"
+        threads: THREADS
+        params:
+            workdir = f"{OUT}/braker3",
+        shell:
+            """
+            mkdir -p {params.workdir}/rnaseq
+            ln -sf $(realpath {input.rna_r1}) {params.workdir}/rnaseq/rnaseq_R1.fastq.gz 2>/dev/null || true
+            """ + (
+            "ln -sf $(realpath {input.rna_r2}) {params.workdir}/rnaseq/rnaseq_R2.fastq.gz 2>/dev/null || true\n"
+            if PAIRED else ""
+            ) + """
+            braker.pl \\
+                --genome={input.genome} \\
+                --softmasking \\
+                --cores={threads} \\
+                --workingdir={params.workdir} \\
+                --rnaseq_sets_ids=rnaseq \\
+                --rnaseq_sets_dir={params.workdir}/rnaseq \\
+                &> {log}
+            """
+    ANNOTATION = f"{OUT}/braker3/braker.gtf"
+
+else:
+    # Keep original extension so format detection stays unambiguous
+    import os as _os
+    _annot_ext  = _os.path.splitext(ANNOT_IN)[1]   # e.g. .gtf or .gff3
+    _annot_link = f"{OUT}/annotation/annotation{_annot_ext}"
+
+    rule link_annotation:
+        input:  annot = ANNOT_IN
+        output: annot = _annot_link
+        shell:  "mkdir -p {OUT}/annotation && ln -sf $(realpath {input.annot}) {output.annot}"
+
+    ANNOTATION = _annot_link
+
+
+# =============================================================================
+# STEP 2 — Index genome with HISAT2
+# =============================================================================
+rule hisat2_build:
+    input:  genome = GENOME
+    output: touch(f"{OUT}/hisat2_index/index.done")
+    log:    f"{OUT}/logs/hisat2_build.log"
+    threads: THREADS
+    params: prefix = f"{OUT}/hisat2_index/genome"
+    shell:
+        """
+        mkdir -p {OUT}/hisat2_index
+        hisat2-build -p {threads} {input.genome} {params.prefix} &> {log}
+        """
+
+
+# =============================================================================
+# STEP 2b — Extract known splice sites from the annotation (GTF only)
+# =============================================================================
+# Feeds hisat2_align to make alignment deterministic (see note at top).
+if IS_GTF:
+    rule hisat2_extract_splicesites:
+        input:  annot = ANNOTATION
+        output: ss    = _SS_FILE
+        log:    f"{OUT}/logs/hisat2_splicesites.log"
+        shell:
+            """
+            mkdir -p {OUT}/hisat2_index
+            hisat2_extract_splice_sites.py {input.annot} > {output.ss} 2> {log}
+            echo "[RAPID] Known splice sites: $(wc -l < {output.ss})" >> {log}
+            """
+
+
+# =============================================================================
+# STEP 3 — Align RNA-seq reads with HISAT2 (deterministic)
+# =============================================================================
+rule hisat2_align:
+    input:
+        index_done  = f"{OUT}/hisat2_index/index.done",
+        splicesites = _SS_INPUT,                      # [] when annotation is GFF3
+        rna_r1      = RNA_R1,
+        rna_r2      = RNA_R2 if PAIRED else [],
+    output: sam = f"{OUT}/hisat2/alignment.sam"
+    log:    f"{OUT}/logs/hisat2_align.log"
+    threads: THREADS
+    params:
+        prefix     = f"{OUT}/hisat2_index/genome",
+        reads_flag = f"-1 {RNA_R1} -2 {RNA_R2}" if PAIRED else f"-U {RNA_R1}",
+        ss_flags   = _SS_FLAGS,
+    shell:
+        """
+        mkdir -p {OUT}/hisat2
+        hisat2 -p {threads} -x {params.prefix} {params.ss_flags} \\
+            {params.reads_flag} -S {output.sam} &> {log}
+        """
+
+
+# =============================================================================
+# STEP 4 — SAM → sorted BAM
+# =============================================================================
+rule samtools_sort:
+    input:  sam = f"{OUT}/hisat2/alignment.sam"
+    output:
+        bam = f"{OUT}/samtools/alignment_sorted.bam",
+        bai = f"{OUT}/samtools/alignment_sorted.bam.bai",
+    log:    f"{OUT}/logs/samtools_sort.log"
+    threads: THREADS
+    shell:
+        """
+        mkdir -p {OUT}/samtools
+        samtools sort -@ {threads} -o {output.bam} {input.sam} &> {log}
+        samtools index {output.bam} &>> {log}
+        """
+
+
+# =============================================================================
+# STEP 5 — Expression quantification with featureCounts
+# =============================================================================
+if IS_GTF:
+    _fc_fmt  = ""
+    _fc_attr = "-g gene_id"
+else:
+    _fc_fmt  = "-F GFF"
+    _fc_attr = "-g Parent"
+
+rule featurecounts:
+    input:
+        bam   = f"{OUT}/samtools/alignment_sorted.bam",
+        annot = ANNOTATION,
+    output: counts = f"{OUT}/featurecounts/counts.txt"
+    log:    f"{OUT}/logs/featurecounts.log"
+    threads: THREADS
+    params:
+        paired_flag = "-p -B" if PAIRED else "",
+        fmt         = _fc_fmt,
+        attr        = _fc_attr,
+    shell:
+        """
+        mkdir -p {OUT}/featurecounts
+        featureCounts -T {threads} {params.paired_flag} \\
+            {params.fmt} -t exon {params.attr} \\
+            --primary \\
+            -a {input.annot} -o {output.counts} {input.bam} &> {log}
+        """
+
+
+# =============================================================================
+# Downstream (shared with track mode): gene selection → primer design → summary
+# =============================================================================
+COUNTS = f"{OUT}/featurecounts/counts.txt"
+include: "common.smk"

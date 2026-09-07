@@ -1,0 +1,36 @@
+name: rapid
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  # Workflow manager
+  - snakemake>=7.32
+  # Python
+  - python>=3.9
+  - pyyaml
+  # Annotation
+  - braker3
+  - augustus
+  # Alignment
+  - hisat2>=2.2
+  - samtools>=1.17
+  # Quantification
+  - subread          # featureCounts
+  # Sequence manipulation
+  - bedtools>=2.31
+  # Primer design
+  - primer3>=2.6
+  # Job-level parallelization for primer3 (one process per gene, dynamically
+  # dispatched across --threads cores, with a built-in progress bar/ETA)
+  - parallel
+  # Primer validation (check mode): exonerate provides ipcress (in silico PCR)
+  - exonerate
+  # R + packages
+  - r-base>=4.3
+  - bioconductor-deseq2
+  - r-dplyr
+  - r-tidyr
+# Map Gbif 
+  - folium
+ 

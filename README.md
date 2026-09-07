@@ -2,7 +2,7 @@
 
 **R**NA **A**utomated **P**rimer **I**dentification and **D**esign
 
-
+```text
 ░                                                                 ░
   ░                                                             ▒  
    █▒                                                         ░░   
@@ -25,7 +25,8 @@
                             ▓░░▒░▒░▒░░▒                            
                              ░░░▒▒░░░                              
                                ▒░░░▓                               
-                                ░░                                 
+                                ░░
+```                          
 
 
 RAPID designs exon–exon **junction-spanning** PCR primers directly from a genome and RNA-seq data. Because each primer sits across a spliced junction, it amplifies mature mRNA but not the corresponding genomic (intron-containing) DNA — ideal for RNA-based assays (RT-PCR, RT-qPCR, ddPCR, eRNA).

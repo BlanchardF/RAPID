@@ -59,7 +59,11 @@ Starting from a reference genome + RNA-seq reads, RAPID aligns the reads, quanti
 ## Installation
 
 ```bash
-git clone <your-repo-url> Rapid
+git clone https://github.com/BlanchardF/RAPID.git Rapid
+
+# update and add this to yours bash.rc fill :
+# export PATH="/path/to/Rapid/git/clone/Rapid/bin:$PATH"
+
 cd Rapid
 rapid install          # or: python rapid.py install
 conda activate rapid

@@ -2,6 +2,32 @@
 
 **R**NA **A**utomated **P**rimer **I**dentification and **D**esign
 
+
+░                                                                 ░
+  ░                                                             ▒  
+   █▒                                                         ░░   
+    ░░▒                                                     ░█     
+      ▒░▒                                                 ░░░      
+       ▒▓░▒                      ▒                      ░░▒        
+   ░▒▒▒▒▓▓▒▒▒░░░░░▒▒▒▒░░░░░▒▒░░░▒▒▒░░▒▒▒▒▒▒▒▒▒▒░░░░░░░░▒▓▓▓▒▒▒▒░   
+   ▓░▓██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓████▓░   
+    ░▒▓▓▓▓▓███░░░░░░█████░░░█████░░░░░░███░░██░░░░░░░██▓▓▓▓█░▒     
+     ▒░█▓▓▓▓▓░░░███░░███░░█░░███░░░███░░██░░██░░███▓░░▓▓▓▓██░▒     
+     ░░█▓▓▓▓▓░░░░░░░███░░░░░░░██░░░░░░░░██░░██░░███▓░░▓▓▓▓█░░      
+      ░░█▓▓▓▓▓░░███░░█░░█████░░█░░████████░░██░░░░░░░▓▓▓▓██░░      
+      ░▒▒█▓▓█████████████████████████████████████████████▒█▒       
+         ▓▒▓▓▒▒░▒▓███████████████████████████████▒░░▒▓▓▓▓░         
+                 ░▒▓▓▒░░░░▓█████████████▒░▒▒▒▓▓█▓░                 
+                      ▒░░░████▓▒▒ ▒▓▓██▓▒▒▒░░                      
+                       ░░░░▒▓██  █  ▓▓▓░▒░░                        
+                         ▒░░▓▒▓▓█ █▓▓▒▒░░▒                         
+                          ░░░▒░▒▓▒▒▒▓▒░░                           
+                            ▓░░▒░▒░▒░░▒                            
+                             ░░░▒▒░░░                              
+                               ▒░░░▓                               
+                                ░░                                 
+
+
 RAPID designs exon–exon **junction-spanning** PCR primers directly from a genome and RNA-seq data. Because each primer sits across a spliced junction, it amplifies mature mRNA but not the corresponding genomic (intron-containing) DNA — ideal for RNA-based assays (RT-PCR, RT-qPCR, ddPCR, eRNA).
 
 The pipeline is built on [Snakemake](https://snakemake.readthedocs.io) and ships as a single command-line tool, `rapid`, with all dependencies pinned in one conda environment.

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# RAPID — RNA Automated Primer Identification and Design
+# Wrapper script. Add the bin/ directory to your PATH:
+#   echo 'export PATH="/path/to/Rapid/bin:$PATH"' >> ~/.bashrc
+#   source ~/.bashrc
+set -euo pipefail
+RAPID_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec python3 "$RAPID_HOME/rapid.py" "$@"

@@ -1,3 +1,4 @@
+
 name: rapid
 channels:
   - conda-forge
@@ -26,6 +27,8 @@ dependencies:
   - parallel
   # Primer validation (check mode): exonerate provides ipcress (in silico PCR)
   - exonerate
+  # Fetch RNA-seq reads directly from SRA (fasterq-dump, prefetch, ...)
+  - sra-tools
   # R + packages
   - r-base>=4.3
   - bioconductor-deseq2
@@ -33,4 +36,3 @@ dependencies:
   - r-tidyr
 # Map Gbif 
   - folium
- 

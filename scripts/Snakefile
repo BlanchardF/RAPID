@@ -82,7 +82,7 @@ if RUN_BRAKER:
             braker.pl \\
                 --genome={input.genome} \\
                 --softmasking \\
-                --cores={threads} \\
+                --threads={threads} \\
                 --workingdir={params.workdir} \\
                 --rnaseq_sets_ids=rnaseq \\
                 --rnaseq_sets_dir={params.workdir}/rnaseq \\

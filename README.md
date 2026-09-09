@@ -103,4 +103,4 @@ See **MANUAL.en.md** for the full tutorial: concepts, every option, choosing thr
 
 ## License / citation
 
-*(Add your license and citation here.)*
+*!!! a mettre a jour !!! ne pas oublier !!!*

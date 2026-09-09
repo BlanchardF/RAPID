@@ -2,7 +2,7 @@
 
 **R**NA **A**utomated **P**rimer **I**dentification and **D**esign
 
-```text
+```bash
 ░                                                                 ░
   ░                                                             ▒  
    █▒                                                         ░░   

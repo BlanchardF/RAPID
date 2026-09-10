@@ -2,19 +2,6 @@
 """
 RAPID — scripts/biogeography.py
 Generate biogeography maps using GBIF tile layers.
-
-Instead of downloading occurrence points, we embed GBIF tile layers directly.
-  - No occurrence limit, instant generation, tiles load on demand in browser
-  - One API call per species (just to resolve the taxon key)
-
-Output structure:
-  maps/
-  ├── species/          ← one map per species (shared, generated only once)
-  │   ├── Latimeria_chalumnae.html
-  │   └── Panax_ginseng.html
-  └── pairs/            ← one combined map per primer pair
-      ├── g10109_j2862_combined.html
-      └── g10171_j197_combined.html
 """
 
 import sys

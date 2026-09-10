@@ -3,15 +3,6 @@
 RAPID — scripts/prepare_ipcress_input.py
 Parse a primers TSV (rapid auto output OR generic 2-column TSV) and write
 an ipcress input file.
-
-Usage:
-    python3 prepare_ipcress_input.py <tsv_path> <output_ipcress> <top_c> <min_size> <max_size>
-
-Auto-detects rapid auto output by checking for a 'PRIMER_PAIR_0_PENALTY'
-column in the header. If present: sorts by penalty (ascending) and uses
-Gene_Junction / PRIMER_LEFT_0_SEQUENCE / PRIMER_RIGHT_0_SEQUENCE columns.
-Otherwise: treats column 1 as forward primer, column 2 as reverse primer,
-keeping the first <top_c> rows in file order.
 """
 
 import sys

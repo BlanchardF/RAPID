@@ -2,15 +2,8 @@
 # RAPID — common.smk
 # Shared downstream rules, from gene selection through primer design and the
 # final summary table. Included by BOTH:
-#   - Snakefile   (auto  mode : single RNA-seq sample)
-#   - track.smk   (track mode : reference-specific gene filter, then identical)
-#
-# The parent workflow MUST define, before `include: "common.smk"`:
-#   OUT, GENOME, EX_MODE, PRODUCT_MIN, PRODUCT_MAX, THREADS,
-#   SCRIPTS_DIR, R_SCRIPT,
-#   COUNTS   → path to the featureCounts table that feeds gene selection.
-#              auto  : {OUT}/featurecounts/counts.txt
-#              track : {OUT}/featurecounts/counts_ref_specific.txt
+#   - Snakefile   
+#   - track.smk  
 # =============================================================================
 
 PRIMER3_EXTRA   = config.get("primer3_extra_params", [])   # list of "KEY=VALUE"
@@ -21,7 +14,6 @@ PRIMER3_TIMEOUT = config.get("primer3_timeout", 7200)       # per-gene timeout (
 # =============================================================================
 # DESeq2 normalization, top-N gene selection, BED + Primer3 preconfig
 # =============================================================================
-# All genes present in COUNTS are used (no conservation/Diamond filter).
 rule select_genes_and_prepare_primer3:
     input:
         counts = COUNTS,
@@ -58,12 +50,6 @@ rule bedtools_getfasta:
 # =============================================================================
 # Merge exons per gene into full spliced transcript sequences
 # =============================================================================
-# The exon FASTA headers are  <Geneid>|<Chr>|<Start>[::coords(strand)]  (the
-# R step joins the Exon_ID with "|"). We recover the gene name as everything
-# before the FIRST "|", so gene_id values that contain "_" or ":" (e.g.
-# WormBase "gene:Smp_155860") are preserved intact. This gene name must match
-# the one fill_primer3_config.py derives from SEQUENCE_ID (rsplit "_j"), so the
-# spliced template is found and SEQUENCE_TEMPLATE is filled.
 rule merge_exons:
     input:  single_exons = f"{OUT}/top_genes/every_single_exons.fasta"
     output:

@@ -2,32 +2,6 @@
 """
 RAPID — scripts/primer3_summary.py
 Parses a Primer3 output file and produces a TSV summary table.
-
-Usage: python3 primer3_summary.py <input_best_primers.txt> <output_summary.tsv>
-
-Junction overlap columns
-------------------------
-For each primer, Primer3 stores its position in the template as:
-  PRIMER_LEFT_0  = start,length   (0-based start, primer goes rightward)
-  PRIMER_RIGHT_0 = end,length     (0-based 3'-end on template, primer goes leftward)
-
-The junction position J (from SEQUENCE_ID g1234_jJ) is the cumulative exon
-length at the junction (1-based boundary): bases 1..J belong to exon N,
-bases J+1.. belong to exon N+1.
-
-A primer "spans" the junction when its template coordinates straddle J.
-  Left primer  [ls, ls+ll-1]  spans J  iff  ls < J  and  ls+ll > J
-  Right primer [re-rl+1, re]  spans J  iff  re-rl+1 < J  and  re >= J
-
-Bases before junction = number of primer bases in exon N  (≤ J side)
-Bases after  junction = number of primer bases in exon N+1 (> J side)
-
-Amplicon columns
-----------------
-The amplicon is the region of SEQUENCE_TEMPLATE bounded by the two primers:
-  amplicon = SEQUENCE_TEMPLATE[left_start : right_end + 1]
-Its length equals PRIMER_PAIR_0_PRODUCT_SIZE (used here as an internal check).
-Amplicon_GC_percent is the %GC of that sequence.
 """
 
 import sys
@@ -75,14 +49,6 @@ def parse_blocks(path):
 def junction_overlap(rec, junction_pos):
     """
     Compute how many bases of each primer fall before and after the junction.
-
-    junction_pos (int) : 1-based boundary — bases 1..J = exon N,
-                         bases J+1.. = exon N+1.
-
-    Returns a dict with keys:
-      left_before, left_after   — for the left/forward primer
-      right_before, right_after — for the right/reverse primer
-    Values are integers (0 when the primer does not span the junction).
     """
     result = {
         "left_before":  0, "left_after":  0,
@@ -123,11 +89,7 @@ def junction_overlap(rec, junction_pos):
 
 def amplicon_info(rec):
     """
-    Return (amplicon_sequence, amplicon_gc_percent) for the pair.
-
-    The amplicon spans from the left primer's start to the right primer's
-    3'-end (inclusive) on SEQUENCE_TEMPLATE. Returns ("NA", "NA") if the
-    required fields are missing or inconsistent.
+    Return amplicon_sequence, amplicon_gc_percent for the pair.
     """
     template  = rec.get("SEQUENCE_TEMPLATE", "")
     left_raw  = rec.get("PRIMER_LEFT_0", "")

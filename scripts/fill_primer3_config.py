@@ -3,33 +3,6 @@
 RAPID — scripts/fill_primer3_config.py
 Fill PLACEHOLDER sequences in a Primer3 pre-config file AND split the result
 into ONE config file per gene.
-
-Why per-gene files
-------------------
-The next step (run_primer3_parallel.py) launches one independent
-`primer3_core` process per gene via GNU Parallel. So instead of producing a
-single huge primer3_config.txt, this script writes one small config file per
-gene into <output_dir>, e.g.:
-
-    <output_dir>/g10004.txt   (contains all junction blocks of gene g10004)
-    <output_dir>/g10171.txt
-    ...
-
-Every file is self-contained and directly runnable with `primer3_core < file`.
-The split cannot be done on the pre-config itself, because the pre-config
-still holds SEQUENCE_TEMPLATE=PLACEHOLDER (no sequence yet) — primer3_core
-cannot run on it. So filling and splitting happen together, here.
-
-Usage:
-    python3 fill_primer3_config.py <preconfig> <merged_fasta> <output_dir>
-                                   [EXTRA_PARAM=VALUE ...]
-
-Extra Primer3 params (optional, repeatable as positional args after the
-three required paths) are injected into every block before the '=' separator.
-
-Note: blocks of the same gene are written contiguously by the R step
-(group_by(Geneid)), so this streams the pre-config once and keeps only a
-single output file open at a time (bounded memory, no "too many open files").
 """
 
 import re

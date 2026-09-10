@@ -11,8 +11,6 @@
 ##   3. Export the exon BED coordinates
 ##   4. Compute the exon-exon junctions and write the Primer3 preconfig
 ##
-## Note: the conservation (Diamond) filter has been removed from the pipeline.
-##       All genes from the featureCounts table are now used.
 ##
 ## Called by Snakemake via the script: directive (access to the snakemake@* objects)
 ## =============================================================================
@@ -25,11 +23,6 @@ suppressPackageStartupMessages({
 
 log_msg <- function(...) message("[RAPID R] ", ...)
 
-# Separator used to build the Exon_ID (BED name). It MUST be a character that
-# never appears in gene identifiers OR chromosome names, because merge_exons
-# recovers the gene name by splitting the header on this separator. WormBase/AGAT
-# gene_id values contain "_" and ":" (e.g. "gene:Smp_155860"), so "_" cannot be
-# used -- we use "|", which merge_exons splits on to recover the full gene name.
 EXON_ID_SEP <- "|"
 
 # ── Parameters from Snakemake ─────────────────────────────────────────────────

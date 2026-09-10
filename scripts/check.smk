@@ -30,8 +30,6 @@ DB_NAMES    = list(DB_FILES.keys())
 def _final_targets():
     # split is always produced; maps only when requested.
     targets = [f"{OUT}/per_pair/.split_done"]
-    # The cross-pair species report is only meaningful for TSA-style databases,
-    # where species are parsed from the ipcress "TSA: Genus species" lines.
     if EXTRACT_SPECIES:
         targets += [
             f"{OUT}/species_by_pair.tsv",
@@ -71,9 +69,6 @@ rule prepare_ipcress_input:
 # =============================================================================
 # STEP 2 — Run ipcress against each database file independently
 # =============================================================================
-# One rule instance per database file (wildcard {db}). This means:
-#   - completed database files are cached and skipped on re-run
-#   - a crash partway through a large TSA only loses the in-progress file
 rule ipcress_per_db:
     input:
         ipcress_in = f"{OUT}/primers.ipcress",
@@ -132,13 +127,6 @@ rule split_by_pair:
 # =============================================================================
 # STEP 5 — Cross-pair species report (matrix TSV + interactive HTML explorer)
 # =============================================================================
-# Reads the per-pair directory produced above and builds:
-#   - species_by_pair.tsv    : pair × species matrix (amplicon counts)
-#   - species_explorer.html  : self-contained page to filter species out and
-#                              see which primer pairs remain specific.
-# Only meaningful for TSA-style databases (species parsed from TSA lines), so
-# it is wired into the targets only when extract_species is set. The rule is
-# always defined, so it can also be requested manually if needed.
 rule check_species_report:
     input:  marker = f"{OUT}/per_pair/.split_done"
     output:

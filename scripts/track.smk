@@ -40,9 +40,6 @@ R_SCRIPT    = str(SCRIPTS_DIR / "01_expression_filter_and_primer3_prep.R")
 _annot_source = (ANNOT_IN if ANNOT_IN else "").lower()
 IS_GTF        = (not ANNOT_IN) or _annot_source.endswith(".gtf")
 
-# Reproducible HISAT2 (see Snakefile note): supply known splice sites from the
-# annotation and disable the dynamic table so every sample aligns
-# deterministically regardless of thread count. GTF only.
 if IS_GTF:
     _SS_FILE  = f"{OUT}/hisat2_index/splicesites.txt"
     _SS_INPUT = _SS_FILE
@@ -137,7 +134,7 @@ else:
 
 
 # =============================================================================
-# STEP 2 — Index genome with HISAT2 (once)
+# STEP 2 — Index genome with HISAT2 
 # =============================================================================
 rule hisat2_build:
     input:  genome = GENOME
@@ -153,7 +150,7 @@ rule hisat2_build:
 
 
 # =============================================================================
-# STEP 2b — Extract known splice sites from the annotation (GTF only, once)
+# STEP 2b — Extract known splice sites from the annotation
 # =============================================================================
 if IS_GTF:
     rule hisat2_extract_splicesites:
@@ -169,7 +166,7 @@ if IS_GTF:
 
 
 # =============================================================================
-# STEP 3 — Align each sample with HISAT2 (deterministic)
+# STEP 3 — Align each sample with HISAT2
 # =============================================================================
 rule hisat2_align:
     input:
@@ -284,9 +281,7 @@ include: "common.smk"
 # STEP 7 — Enriched primer report (track-only: needs per-stage CPM)
 # =============================================================================
 # Merges the kept primer pairs (best_primers.txt) with per-stage expression
-# (CPM + enrichment) into a sortable TSV and an interactive HTML explorer where
-# primers can be hidden/kept while reviewing. Uses all per-sample counts and the
-# track config (for stage labels). Reference stage first.
+# (CPM + enrichment) into a sortable TSV and an interactive HTML
 rule primer_report:
     input:
         best   = f"{OUT}/primer3/results/best_primers.txt",

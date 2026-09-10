@@ -31,15 +31,7 @@ R_SCRIPT    = str(SCRIPTS_DIR / "01_expression_filter_and_primer3_prep.R")
 _annot_source = (ANNOT_IN if ANNOT_IN else "").lower()
 IS_GTF        = (not ANNOT_IN) or _annot_source.endswith(".gtf")
 
-# Reproducible HISAT2: aligning spliced reads uses splice sites discovered
-# on-the-fly by earlier reads, and with multiple threads the discovery order
-# varies run-to-run — giving slightly different counts (and, at the selection
-# boundary, different primers). Supplying the known splice sites from the
-# annotation and disabling the dynamic (temp) table makes alignment fully
-# deterministic across runs and thread counts, with no loss of sensitivity.
-# hisat2_extract_splice_sites.py only reads GTF, so this is applied for GTF
-# annotations (and Braker output, which is GTF). For GFF3, alignment falls
-# back to the default behaviour (convert to GTF for deterministic runs).
+
 if IS_GTF:
     _SS_FILE  = f"{OUT}/hisat2_index/splicesites.txt"
     _SS_INPUT = _SS_FILE

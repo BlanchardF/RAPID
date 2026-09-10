@@ -7,19 +7,6 @@ interactive HTML page to explore which species each primer pair amplifies and
 to filter species out ("I don't care about this species") to see which pairs
 remain specific.
 
-Input (auto-detected):
-  - a DIRECTORY produced by split_ipcress_by_pair.py, containing per-pair files
-    <pair>.txt (ipcress blocks) and/or <pair>_species.txt (species list), OR
-  - a single combined ipcress raw results FILE.
-
-Outputs:
-  <out_tsv>  : tab-separated matrix  (rows = primer pairs, columns = species,
-               cells = number of in silico amplicons; plus an n_species column)
-  <out_html> : self-contained interactive explorer (open in any browser)
-
-Usage:
-  python3 check_species_report.py <input_dir_or_file> <out_tsv> <out_html>
-
 Species are parsed from ipcress "Target: ... TSA: Genus species ..." lines,
 exactly as in split_ipcress_by_pair.py (only meaningful for TSA-style DBs).
 """

@@ -54,7 +54,9 @@ Starting from a reference genome + RNA-seq reads, RAPID aligns the reads, quanti
 - Linux, [conda](https://docs.conda.io) or [mamba](https://mamba.readthedocs.io)
 - A reference genome in **FASTA** (decompressed, ideally **soft-masked**)
 - RNA-seq reads (FASTQ, single- or paired-end)
-- Optionally, a structural annotation. **GTF is strongly recommended** (see the manual): GFF3 works but disables the reproducibility safeguard and aggregates per transcript.
+- A annotation whitout isoforme. **GTF ** (see the manual)
+
+  manuel a update pour isoforme avec :  agat_sp_keep_longest_isoform.pl --gff braker.gtf -o annotation.longest.gtf  
 
 ## Installation
 

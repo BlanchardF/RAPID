@@ -115,7 +115,6 @@ rule hisat2_build:
 # =============================================================================
 # STEP 2b — Extract known splice sites from the annotation (GTF only)
 # =============================================================================
-# Feeds hisat2_align to make alignment deterministic (see note at top).
 if IS_GTF:
     rule hisat2_extract_splicesites:
         input:  annot = ANNOTATION

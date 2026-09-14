@@ -14,13 +14,12 @@ The design is driven by RNA-seq: genes are selected by their expression, and —
 
 Pipeline (mode `auto`):
 
-1. **Annotation** — provided (`-a`) or produced de novo by BRAKER3 from the reads.
-2. **Alignment** — HISAT2 (splice-aware), then SAMtools sort/index.
-3. **Quantification** — featureCounts, per gene, at the exon level.
-4. **Gene selection & junctions** — DESeq2 size-factor normalisation, selection by expression stratum, computation of internal exon–exon junctions, export of exon BED + a Primer3 preconfig with the junction directives.
-5. **Spliced templates** — BEDTools extracts exons; they are concatenated per gene.
-6. **Primer3** — one config per gene, run in parallel (GNU Parallel), with a per-gene timeout.
-7. **Ranking & summary** — best pairs by penalty → `best_primers.txt` + `primers_summary.tsv`.
+1. **Alignment** — HISAT2 (splice-aware), then SAMtools sort/index.
+2. **Quantification** — featureCounts, per gene, at the exon level.
+3. **Gene selection & junctions** — DESeq2 size-factor normalisation, selection by expression stratum, computation of internal exon–exon junctions, export of exon BED + a Primer3 preconfig with the junction directives.
+4. **Spliced templates** — BEDTools extracts exons; they are concatenated per gene.
+5. **Primer3** — one config per gene, run in parallel (GNU Parallel), with a per-gene timeout.
+6. **Ranking & summary** — best pairs by penalty → `best_primers.txt` + `primers_summary.tsv`.
 
 `track` inserts a reference-specificity filter between steps 3 and 4; everything downstream is identical. `check` is a separate validation workflow.
 

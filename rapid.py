@@ -203,7 +203,7 @@ def parse_auto_args():
                      default=[], dest="primer3_params",
                      help=("Extra Primer3 global parameter (repeatable). "
                            "E.g. -p \"PRIMER_MIN_SIZE=18\" -p \"PRIMER_MAX_SIZE=27\""))
-    opt.add_argument("-ex", "--expression", default="max", metavar="MODE",
+    opt.add_argument("-ex", "--expression", default="500", metavar="MODE",
                      help=(
                          "Gene expression selection mode:\n"
                          "  max / +   : top 33%% most expressed (default)\n"
@@ -387,7 +387,7 @@ def parse_track_args():
     opt.add_argument("-p", "--primer3-param", metavar="KEY=VALUE", action="append",
                      default=[], dest="primer3_params",
                      help="Extra Primer3 global parameter (repeatable).")
-    opt.add_argument("-ex", "--expression", default="max", metavar="MODE",
+    opt.add_argument("-ex", "--expression", default="500", metavar="MODE",
                      help="Gene expression selection mode (max/+, mid, min, N, -N). "
                           "Ranking is on the reference sample. Default: max.")
     opt.add_argument("--primer-product-min", type=int, default=100, metavar="INT",

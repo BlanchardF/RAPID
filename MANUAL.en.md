@@ -53,6 +53,7 @@ gunzip -k genome.fa.gz        # keep the .gz, produce genome.fa
 - `.gff/.gff3` → featureCounts uses `-g Parent` (aggregates per **transcript**, not per gene) and the HISAT2 reproducibility safeguard is skipped.
 
 If your annotation is GFF3, convert it to GTF first (see §9).
+
 If your annotation has isoforme, use AGAT (see §9).
 
 **RNA-seq reads** — FASTQ(.gz). One file = single-end; two files (R1 R2) = paired-end.

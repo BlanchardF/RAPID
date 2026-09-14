@@ -48,7 +48,7 @@ The `rapid` environment contains: Snakemake, BRAKER3 + AUGUSTUS, HISAT2, SAMtool
 gunzip -k genome.fa.gz        # keep the .gz, produce genome.fa
 ```
 
-**Annotation without isoform ** — **GTF preferred**. RAPID detects the format from the file extension:
+**Annotation without isoform** — **GTF preferred**. RAPID detects the format from the file extension:
 - `.gtf` → featureCounts uses `-g gene_id`, and reproducible splice sites are extracted for HISAT2 (see §7).
 - `.gff/.gff3` → featureCounts uses `-g Parent` (aggregates per **transcript**, not per gene) and the HISAT2 reproducibility safeguard is skipped.
 

@@ -42,17 +42,18 @@ The `rapid` environment contains: Snakemake, BRAKER3 + AUGUSTUS, HISAT2, SAMtool
 
 ## 3. Inputs
 
-**Genome** — FASTA, **decompressed** (HISAT2 and BEDTools do not read `.gz`) and ideally **soft-masked** (repeats in lowercase). Soft-masking is required by BRAKER3 and is transparent to alignment; RAPID upper-cases sequences before Primer3, so lowercase has no downstream effect. Do **not** hard-mask (Ns break alignment and primer design).
+**Genome** — FASTA, **decompressed** (HISAT2 and BEDTools do not read `.gz`) and ideally **soft-masked** (repeats in lowercase). Do **not** hard-mask (Ns break alignment and primer design).
 
 ```bash
 gunzip -k genome.fa.gz        # keep the .gz, produce genome.fa
 ```
 
-**Annotation** *(optional but recommended)* — **GTF preferred**. RAPID detects the format from the file extension:
+**Annotation without isoform ** — **GTF preferred**. RAPID detects the format from the file extension:
 - `.gtf` → featureCounts uses `-g gene_id`, and reproducible splice sites are extracted for HISAT2 (see §7).
 - `.gff/.gff3` → featureCounts uses `-g Parent` (aggregates per **transcript**, not per gene) and the HISAT2 reproducibility safeguard is skipped.
 
-If your annotation is GFF3, convert it to GTF first (see §9). If you omit `-a`, BRAKER3 runs automatically — but its predictions are stochastic, so for reproducible results run it once and reuse the resulting `braker.gtf` via `-a`.
+If your annotation is GFF3, convert it to GTF first (see §9).
+If your annotation has isoforme, use AGAT (see §9).
 
 **RNA-seq reads** — FASTQ(.gz). One file = single-end; two files (R1 R2) = paired-end.
 
@@ -212,7 +213,7 @@ Run `rapid clean` **only when no run is active** — it removes `.snakemake/` fr
 
 ---
 
-## 9. GFF3 → GTF conversion (AGAT)
+## 9. AGAT : GFF3 → GTF conversion and isoforme
 
 RAPID works best with GTF (reproducible splice sites + per-gene aggregation). If you have a GFF3 (e.g. from WormBase ParaSite), convert it in a **dedicated** environment:
 
@@ -220,11 +221,18 @@ RAPID works best with GTF (reproducible splice sites + per-gene aggregation). If
 conda create -n agat -c bioconda -c conda-forge agat
 conda activate agat
 gunzip -k annotation.gff3.gz
-agat_convert_sp_gff2gtf.pl --gff annotation.gff3 -o annotation.gtf
+
+# 1. Convert GFF3 to GTF
+agat_convert_sp_gff2gtf.pl --gff annotation.gff3 -o annotation_raw.gtf
+
+# 2. Filter out isoforms to keep only the longest transcript per gene
+agat_sp_keep_longest_isoform.pl --gff annotation_raw.gtf -o annotation.gtf
+
 conda deactivate && conda activate rapid
 # sanity check: exons must carry gene_id
 grep -P "\texon\t" annotation.gtf | head -3
 ```
+You can complete only step 1 or 2, depending on your needs. 
 
 If `agat_*` errors with `Can't locate AGAT/AGAT.pm`, your shell is mixing environments (a different Perl is in `PATH`/`PERL5LIB`). Use `conda run -n agat agat_convert_sp_gff2gtf.pl …`, or clear `PERL5LIB` for the command.
 

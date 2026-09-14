@@ -33,7 +33,7 @@ rapid install --update-only   # update an existing env
 conda activate rapid
 ```
 
-The `rapid` environment contains: Snakemake, BRAKER3 + AUGUSTUS, HISAT2, SAMtools, Subread (featureCounts), BEDTools, Primer3, GNU Parallel, exonerate (provides `ipcress`), R with DESeq2/dplyr/tidyr, and folium (biogeography maps).
+The `rapid` environment contains: Snakemake, HISAT2, SAMtools, Subread (featureCounts), BEDTools, Primer3, GNU Parallel, exonerate (provides `ipcress`), R with DESeq2/dplyr/tidyr, and folium (biogeography maps).
 
 **AGAT (for GFF3 → GTF conversion and for Remove the isoforms from the annotation) is intentionally NOT in this environment** — it pulls a large Perl stack that conflicts with the pinned dependencies. Install it in its own environment when needed (see §9).
 
@@ -75,8 +75,8 @@ rapid auto -g genome.fa -r R1.fq.gz R2.fq.gz -o results/ -a annotation.gtf
 | `-g, --genome` | — | Reference genome (FASTA). **Required.** |
 | `-r, --rna` | — | 1 file (SE) or 2 files (PE R1 R2). **Required.** |
 | `-o, --output` | — | Output directory. **Required.** |
-| `-a, --annot` | — | Annotation (GTF/GFF3). If omitted, BRAKER3 runs. |
-| `-ex, --expression` | `max` | Expression stratum: `max`/`+` (top 33%), `mid` (33–66%), `min` (bottom 33%), `N` (top N), `-N` (bottom N). |
+| `-a, --annot` | — | Annotation (GTF/GFF3). |
+| `-ex, --expression` | `500` | Expression stratum: `max`/`+` (top 33%), `mid` (33–66%), `min` (bottom 33%), `N` (top N), `-N` (bottom N). |
 | `--primer-product-min` | `100` | Minimum amplicon size (bp). |
 | `--primer-product-max` | `200` | Maximum amplicon size (bp). Must be > min. |
 | `--top-primers` | `10` | Number of best pairs to keep (by penalty). |
@@ -129,7 +129,7 @@ python3 Rapid/scripts/track_cpm_scan.py \
     --min-cpm-ref 1 --fold-grid 2 3 5 10 20 50
 ```
 
-Pick the smallest fold-change that yields a workable number of candidates (a few dozen to a few hundred). If you have a known good gene, add `--gene Smp_169190` to see its per-stage CPM and the exact fold-change below which it is kept — a useful sanity check.
+Pick the smallest fold-change that yields a workable number of candidates (a few dozen to a few hundred).
 
 ### Output specific to `track`
 
@@ -244,7 +244,6 @@ If `agat_*` errors with `Can't locate AGAT/AGAT.pm`, your shell is mixing enviro
 With a **fixed GTF annotation**, RAPID is deterministic — the same inputs give the same primers, even across machines and different `--threads`. Two points:
 
 - **HISAT2** normally reuses splice sites discovered on the fly, which makes multi-threaded runs slightly non-deterministic. RAPID avoids this by extracting the known splice sites from the annotation and passing `--known-splicesite-infile … --no-temp-splicesite`. This is applied for **GTF** annotations only (the extraction script reads GTF). With GFF3, convert to GTF (§9) for reproducible alignment.
-- **BRAKER3** (used when no `-a` is given) is stochastic. Run it once, keep `braker.gtf`, and always reuse it via `-a` for reproducible downstream results.
 
 ---
 
@@ -263,8 +262,6 @@ On a cluster with a scheduler (e.g. SLURM), each job already runs in its own wor
 ---
 
 ## 12. Troubleshooting
-
-**`rule braker3` fails with `$GENEMARK_PATH not set!` (or a similar GeneMark error)** — you omitted `-a` and BRAKER3 needs GeneMark-ES/ET, which cannot be shipped in `rapid.yaml` for licensing reasons. Install it and export `GENEMARK_PATH` as described in §2.1, then re-run. If you already have any annotation (even a partial/draft GTF), it is simpler to pass it via `-a` and skip BRAKER3 — and GTF also unlocks the reproducibility safeguard in §10.
 
 **`hisat2-build`/`bedtools` fail on the genome** — the genome is still gzipped. Decompress it: `gunzip -k genome.fa.gz`.
 
@@ -324,6 +321,6 @@ results/
 
 ## 14. Tools & citation
 
-RAPID orchestrates: BRAKER3, HISAT2, SAMtools, Subread/featureCounts, DESeq2, BEDTools, Primer3, GNU Parallel, exonerate (ipcress), and folium, via Snakemake. Please cite these tools and RAPID itself.
+RAPID orchestrates: HISAT2, SAMtools, Subread/featureCounts, DESeq2, BEDTools, Primer3, GNU Parallel, exonerate (ipcress), and folium, via Snakemake. Please cite these tools and RAPID itself.
 
 *(Add the RAPID citation / DOI here.)*

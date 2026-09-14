@@ -36,45 +36,8 @@ conda activate rapid
 
 The `rapid` environment contains: Snakemake, BRAKER3 + AUGUSTUS, HISAT2, SAMtools, Subread (featureCounts), BEDTools, Primer3, GNU Parallel, exonerate (provides `ipcress`), R with DESeq2/dplyr/tidyr, and folium (biogeography maps).
 
-**AGAT (for GFF3 → GTF conversion) is intentionally NOT in this environment** — it pulls a large Perl stack that conflicts with the pinned dependencies. Install it in its own environment when needed (see §9).
+**AGAT (for GFF3 → GTF conversion and for Remove the isoforms from the annotation) is intentionally NOT in this environment** — it pulls a large Perl stack that conflicts with the pinned dependencies. Install it in its own environment when needed (see §9).
 
-### 2.1 GeneMark-ES/ET (required only if you skip `-a`)
-
-If you provide an annotation with `-a`, BRAKER3 never runs and you can **skip this section entirely**.
-
-If you omit `-a`, RAPID calls BRAKER3 to build an annotation from your RNA-seq reads, and BRAKER3 in turn depends on **GeneMark-ES/ET**. GeneMark is under a free-for-academic-use license that forbids redistribution, so it is **not** in `rapid.yaml` / bioconda and must be installed by hand, once per machine:
-
-```bash
-# 1) Register and download (free) from the GeneMark license page:
-#    http://topaz.gatech.edu/GeneMark/license_download.cgi
-#    Pick "GeneMark-ES/ET/EP+ ver 4.7x", Linux 64 bit.
-#    Download BOTH the software tarball and the 64_bit key file.
-
-# 2) Extract the tarball somewhere permanent, e.g. ~/tools/
-mkdir -p ~/tools
-tar -xzf gmes_linux_64_4.7x_lic.tar.gz -C ~/tools/
-mv ~/tools/gmes_linux_64_4.7x ~/tools/gmes_linux_64   # optional: drop the version from the folder name
-
-# 3) Install the license key in your home directory (NOT in the GeneMark folder)
-gunzip -k gm_key_64.gz
-cp gm_key_64 ~/.gm_key
-
-# 4) Make the scripts executable and sanity-check them
-chmod +x ~/tools/gmes_linux_64/*.pl
-perl -c ~/tools/gmes_linux_64/gmes_petap.pl
-#   -> "syntax OK" means Perl and its GeneMark dependencies are fine.
-#   -> "Can't locate <Module>.pm" means a Perl module is missing; install it
-#      with `conda install -n rapid -c bioconda perl-<module-name>` (lowercase,
-#      dashes instead of ::), or via `cpan <Module>`.
-
-# 5) Point BRAKER3 to this install by exporting GENEMARK_PATH
-export GENEMARK_PATH=~/tools/gmes_linux_64
-echo 'export GENEMARK_PATH=~/tools/gmes_linux_64' >> ~/.bashrc
-```
-
-`GENEMARK_PATH` must point to the folder that directly contains `gmes_petap.pl` (ET/ES mode) or `gmetp.pl` (ETP mode, only used when BRAKER3 also gets protein evidence — not the case in RAPID's default `auto`/`track` calls). Re-source your shell (`source ~/.bashrc`) or open a new terminal, then `conda activate rapid` again before re-running `rapid auto`/`rapid track`.
-
-The `~/.gm_key` file has an expiry date; if BRAKER3 suddenly starts failing again after months of working fine, re-download a fresh key from the same license page.
 
 ---
 

@@ -14,10 +14,9 @@ GENOME      = config["genome"]
 RNA_R1      = config["rna_r1"]
 RNA_R2      = config.get("rna_r2")
 PAIRED      = config["paired"]
-ANNOT_IN    = config.get("annotation")
-RUN_BRAKER  = config["run_braker"]
+ANNOT_IN    = config["annotation"]
 THREADS     = config["threads"]
-EX_MODE     = config.get("ex_mode", "max")   # max/+, mid, min, or integer
+EX_MODE     = config.get("ex_mode", "500")   # max/+, mid, min, or integer
 PRODUCT_MIN = config.get("primer_product_min", 100)
 PRODUCT_MAX = config.get("primer_product_max", 200)
 
@@ -25,11 +24,8 @@ PRODUCT_MAX = config.get("primer_product_max", 200)
 SCRIPTS_DIR = Path(workflow.basedir)
 R_SCRIPT    = str(SCRIPTS_DIR / "01_expression_filter_and_primer3_prep.R")
 
-# Annotation format, detected once from the ORIGINAL input path (the symlink is
-# always .gtf/.gff*). Braker output is always GTF. Used both for splice-site
-# extraction (GTF only) and for the featureCounts attribute/format flags.
-_annot_source = (ANNOT_IN if ANNOT_IN else "").lower()
-IS_GTF        = (not ANNOT_IN) or _annot_source.endswith(".gtf")
+_annot_source = ANNOT_IN.lower()
+IS_GTF        = _annot_source.endswith(".gtf")
 
 
 if IS_GTF:
@@ -49,51 +45,18 @@ rule all:
 
 
 # =============================================================================
-# STEP 1 — Annotation: Braker3 OR link provided annotation
+# STEP 1 — Annotation: Link provided annotation
 # =============================================================================
-if RUN_BRAKER:
-    rule braker3:
-        input:
-            genome = GENOME,
-            rna_r1 = RNA_R1,
-            rna_r2 = RNA_R2 if PAIRED else [],
-        output:
-            annot  = f"{OUT}/braker3/braker.gtf",
-        log:    f"{OUT}/logs/braker3.log"
-        threads: THREADS
-        params:
-            workdir = f"{OUT}/braker3",
-        shell:
-            """
-            mkdir -p {params.workdir}/rnaseq
-            ln -sf $(realpath {input.rna_r1}) {params.workdir}/rnaseq/rnaseq_R1.fastq.gz 2>/dev/null || true
-            """ + (
-            "ln -sf $(realpath {input.rna_r2}) {params.workdir}/rnaseq/rnaseq_R2.fastq.gz 2>/dev/null || true\n"
-            if PAIRED else ""
-            ) + """
-            braker.pl \\
-                --genome={input.genome} \\
-                --softmasking \\
-                --threads={threads} \\
-                --workingdir={params.workdir} \\
-                --rnaseq_sets_ids=rnaseq \\
-                --rnaseq_sets_dir={params.workdir}/rnaseq \\
-                &> {log}
-            """
-    ANNOTATION = f"{OUT}/braker3/braker.gtf"
+import os as _os
+_annot_ext  = _os.path.splitext(ANNOT_IN)[1]   # e.g. .gtf or .gff3
+_annot_link = f"{OUT}/annotation/annotation{_annot_ext}"
 
-else:
-    # Keep original extension so format detection stays unambiguous
-    import os as _os
-    _annot_ext  = _os.path.splitext(ANNOT_IN)[1]   # e.g. .gtf or .gff3
-    _annot_link = f"{OUT}/annotation/annotation{_annot_ext}"
+rule link_annotation:
+    input:  annot = ANNOT_IN
+    output: annot = _annot_link
+    shell:  "mkdir -p {OUT}/annotation && ln -sf $(realpath {input.annot}) {output.annot}"
 
-    rule link_annotation:
-        input:  annot = ANNOT_IN
-        output: annot = _annot_link
-        shell:  "mkdir -p {OUT}/annotation && ln -sf $(realpath {input.annot}) {output.annot}"
-
-    ANNOTATION = _annot_link
+ANNOTATION = _annot_link
 
 
 # =============================================================================

@@ -19,10 +19,9 @@ from pathlib import Path
 # ── Config ────────────────────────────────────────────────────────────────────
 OUT         = config["output_dir"]
 GENOME      = config["genome"]
-ANNOT_IN    = config.get("annotation")
-RUN_BRAKER  = config["run_braker"]
+ANNOT_IN    = config["annotation"]
 THREADS     = config["threads"]
-EX_MODE     = config.get("ex_mode", "max")
+EX_MODE     = config.get("ex_mode", "500")
 PRODUCT_MIN = config.get("primer_product_min", 100)
 PRODUCT_MAX = config.get("primer_product_max", 200)
 
@@ -36,9 +35,9 @@ FOLD_CHANGE = config.get("fold_change", 10.0)
 SCRIPTS_DIR = Path(workflow.basedir)
 R_SCRIPT    = str(SCRIPTS_DIR / "01_expression_filter_and_primer3_prep.R")
 
-# Annotation format, detected once (see Snakefile for the rationale).
-_annot_source = (ANNOT_IN if ANNOT_IN else "").lower()
-IS_GTF        = (not ANNOT_IN) or _annot_source.endswith(".gtf")
+# Annotation format, detected once from the ORIGINAL input path.
+_annot_source = ANNOT_IN.lower()
+IS_GTF        = _annot_source.endswith(".gtf")
 
 if IS_GTF:
     _SS_FILE  = f"{OUT}/hisat2_index/splicesites.txt"
@@ -82,55 +81,17 @@ rule all:
 
 
 # =============================================================================
-# STEP 1 — Annotation: Braker3 (all samples as evidence) OR link provided
+# STEP 1 — Annotation: Link provided annotation
 # =============================================================================
-if RUN_BRAKER:
-    _BRAKER_WORKDIR = f"{OUT}/braker3"
-    _link_lines = [f"mkdir -p {_BRAKER_WORKDIR}/rnaseq"]
-    _set_ids    = []
-    for _n in ALL_NAMES:
-        _s = SAMPLES[_n]
-        _link_lines.append(
-            f"ln -sf $(realpath {_s['r1']}) {_BRAKER_WORKDIR}/rnaseq/{_n}_R1.fastq.gz 2>/dev/null || true"
-        )
-        if _s.get("r2"):
-            _link_lines.append(
-                f"ln -sf $(realpath {_s['r2']}) {_BRAKER_WORKDIR}/rnaseq/{_n}_R2.fastq.gz 2>/dev/null || true"
-            )
-        _set_ids.append(_n)
-    _link_block  = "\n        ".join(_link_lines)
-    _set_ids_str = ",".join(_set_ids)
+_annot_ext  = _os.path.splitext(ANNOT_IN)[1]
+_annot_link = f"{OUT}/annotation/annotation{_annot_ext}"
 
-    rule braker3:
-        input:
-            genome = GENOME,
-            reads  = [r for n in ALL_NAMES for r in sample_reads(n)],
-        output: annot = f"{OUT}/braker3/braker.gtf"
-        log:    f"{OUT}/logs/braker3.log"
-        threads: THREADS
-        shell:
-            _link_block + "\n" + f"""
-        braker.pl \\
-            --genome={{input.genome}} \\
-            --softmasking \\
-            --cores={{threads}} \\
-            --workingdir={_BRAKER_WORKDIR} \\
-            --rnaseq_sets_ids={_set_ids_str} \\
-            --rnaseq_sets_dir={_BRAKER_WORKDIR}/rnaseq \\
-            &> {{log}}
-        """
-    ANNOTATION = f"{OUT}/braker3/braker.gtf"
+rule link_annotation:
+    input:  annot = ANNOT_IN
+    output: annot = _annot_link
+    shell:  "mkdir -p {OUT}/annotation && ln -sf $(realpath {input.annot}) {output.annot}"
 
-else:
-    _annot_ext  = _os.path.splitext(ANNOT_IN)[1]
-    _annot_link = f"{OUT}/annotation/annotation{_annot_ext}"
-
-    rule link_annotation:
-        input:  annot = ANNOT_IN
-        output: annot = _annot_link
-        shell:  "mkdir -p {OUT}/annotation && ln -sf $(realpath {input.annot}) {output.annot}"
-
-    ANNOTATION = _annot_link
+ANNOTATION = _annot_link
 
 
 # =============================================================================
@@ -150,7 +111,7 @@ rule hisat2_build:
 
 
 # =============================================================================
-# STEP 2b — Extract known splice sites from the annotation
+# STEP 2b — Extract known splice sites from the annotation (GTF only)
 # =============================================================================
 if IS_GTF:
     rule hisat2_extract_splicesites:
@@ -173,8 +134,8 @@ rule hisat2_align:
         index_done  = f"{OUT}/hisat2_index/index.done",
         splicesites = _SS_INPUT,                       # [] when annotation is GFF3
         reads       = lambda wc: sample_reads(wc.sample),
-    output: sam = f"{OUT}/hisat2/{{sample}}.sam"
-    log:    f"{OUT}/logs/hisat2_align_{{sample}}.log"
+    output: sam = f"{OUT}/hisat2/{sample}.sam"
+    log:    f"{OUT}/logs/hisat2_align_{sample}.log"
     threads: THREADS
     params:
         prefix     = f"{OUT}/hisat2_index/genome",
@@ -196,11 +157,11 @@ rule hisat2_align:
 # STEP 4 — SAM → sorted BAM (per sample)
 # =============================================================================
 rule samtools_sort:
-    input:  sam = f"{OUT}/hisat2/{{sample}}.sam"
+    input:  sam = f"{OUT}/hisat2/{sample}.sam"
     output:
-        bam = f"{OUT}/samtools/{{sample}}_sorted.bam",
-        bai = f"{OUT}/samtools/{{sample}}_sorted.bam.bai",
-    log:    f"{OUT}/logs/samtools_sort_{{sample}}.log"
+        bam = f"{OUT}/samtools/{sample}_sorted.bam",
+        bai = f"{OUT}/samtools/{sample}_sorted.bam.bai",
+    log:    f"{OUT}/logs/samtools_sort_{sample}.log"
     threads: THREADS
     shell:
         """
@@ -222,10 +183,10 @@ else:
 
 rule featurecounts:
     input:
-        bam   = f"{OUT}/samtools/{{sample}}_sorted.bam",
+        bam   = f"{OUT}/samtools/{sample}_sorted.bam",
         annot = ANNOTATION,
-    output: counts = f"{OUT}/featurecounts/counts_{{sample}}.txt"
-    log:    f"{OUT}/logs/featurecounts_{{sample}}.log"
+    output: counts = f"{OUT}/featurecounts/counts_{sample}.txt"
+    log:    f"{OUT}/logs/featurecounts_{sample}.log"
     threads: THREADS
     params:
         paired_flag = lambda wc: "-p -B" if SAMPLES[wc.sample].get("r2") else "",
@@ -280,8 +241,6 @@ include: "common.smk"
 # =============================================================================
 # STEP 7 — Enriched primer report (track-only: needs per-stage CPM)
 # =============================================================================
-# Merges the kept primer pairs (best_primers.txt) with per-stage expression
-# (CPM + enrichment) into a sortable TSV and an interactive HTML
 rule primer_report:
     input:
         best   = f"{OUT}/primer3/results/best_primers.txt",

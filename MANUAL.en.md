@@ -227,7 +227,7 @@ gunzip -k annotation.gff3.gz
 agat_convert_sp_gff2gtf.pl --gff annotation.gff3 -o annotation_raw.gtf
 
 # 2. Filter out isoforms to keep only the longest transcript per gene
-agat_sp_keep_longest_isoform.pl --gff annotation_raw.gtf -o annotation.gtf
+agat_sp_keep_longest_isoform.pl --gff annotation_raw.gtf -o annotation_no_isoforme.gtf
 
 conda deactivate && conda activate rapid
 # sanity check: exons must carry gene_id

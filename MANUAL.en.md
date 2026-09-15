@@ -235,8 +235,6 @@ grep -P "\texon\t" annotation.gtf | head -3
 ```
 You can complete only step 1 or 2, depending on your needs. 
 
-If `agat_*` errors with `Can't locate AGAT/AGAT.pm`, your shell is mixing environments (a different Perl is in `PATH`/`PERL5LIB`). Use `conda run -n agat agat_convert_sp_gff2gtf.pl …`, or clear `PERL5LIB` for the command.
-
 ---
 
 ## 10. Reproducibility

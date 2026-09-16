@@ -195,11 +195,11 @@ def parse_auto_args():
                      help="RNA-seq reads: 1 file (single-end) or 2 files (paired-end R1 R2).")
     req.add_argument("-o", "--output",     required=True, metavar="DIR",
                      help="Output directory.")
-
-    opt = parser.add_argument_group("optional arguments")
-    opt.add_argument("-a", "--annot",      metavar="GFF/GTF", default=None,
-                     help="Existing annotation. If omitted, Braker3 runs automatically.")
-    opt.add_argument("-p", "--primer3-param", metavar="KEY=VALUE", action="append",
+    req.add_argument("-a", "--annot",      metavar="GFF/GTF", default=None,
+                     help="annotation whitout isoforme")
+  
+  opt = parser.add_argument_group("optional arguments")
+  opt.add_argument("-p", "--primer3-param", metavar="KEY=VALUE", action="append",
                      default=[], dest="primer3_params",
                      help=("Extra Primer3 global parameter (repeatable). "
                            "E.g. -p \"PRIMER_MIN_SIZE=18\" -p \"PRIMER_MAX_SIZE=27\""))
@@ -365,6 +365,8 @@ def parse_track_args():
     req.add_argument("--other", required=True, nargs="+", action="append", metavar="READS",
                      help="An 'other' RNA-seq sample: 1 file (SE) or 2 files (R1 R2). "
                           "Repeat --other for each additional sample.")
+    req.add_argument("-a", "--annot", metavar="GFF/GTF", default=None,
+                     help="annotation whitout isoforme ! ")
 
     filt = parser.add_argument_group("filter options")
     filt.add_argument("--filter", choices=["absolute", "cpm"], default="absolute",
@@ -381,9 +383,7 @@ def parse_track_args():
                            "stage. Default: 10.")
 
     opt = parser.add_argument_group("optional arguments")
-    opt.add_argument("-a", "--annot", metavar="GFF/GTF", default=None,
-                     help="Existing annotation. If omitted, Braker3 runs automatically "
-                          "using all provided samples as RNA-seq evidence.")
+    
     opt.add_argument("-p", "--primer3-param", metavar="KEY=VALUE", action="append",
                      default=[], dest="primer3_params",
                      help="Extra Primer3 global parameter (repeatable).")

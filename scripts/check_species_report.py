@@ -166,7 +166,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <header>
   <h1>RAPID check — species / pair explorer</h1>
   <div class="sub">Check species on the left to bring their matching primer pairs to the top,
-  highlighted in <b style="color:var(--good)">green</b> below.</div>
+  highlighted in <b style="color:var(--good)">green</b> below. Check the box next to any pair
+  to select it, then use "Export selected pairs (TSV)" to download a primers_summary.tsv
+  containing only those pairs.</div>
 </header>
 <div class="layout">
   <aside class="side">
@@ -182,6 +184,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="toolbar">
       <label><input type="checkbox" id="onlyClean" onchange="renderPairs()"> Show only matching pairs (amplify a checked species)</label>
     </div>
+    <div class="toolbar">
+      <button onclick="selectAllVisible()">Select all visible pairs</button>
+      <button onclick="clearPairSelection()">Clear pair selection</button>
+      <button onclick="exportSelected()">Export selected pairs (TSV)</button>
+    </div>
     <div class="legend" id="stats"></div>
     <div id="pairsList"></div>
   </main>
@@ -190,7 +197,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <script>
 const DATA = __DATA__;
 // DATA = { pairs: { pairId: { "Genus species": count, ... } }, species: [ ... ] }
-const selected = new Set();   // species the user checked ("I care about this one")
+const selected = new Set();      // species the user checked ("I care about this one")
+const checkedPairs = new Set();  // primer pairs the user picked for export
+let visiblePids = [];            // pair ids currently shown (after the "only matching" filter)
 
 function speciesCounts() {
   // total amplicons per species across all pairs (for display)
@@ -230,6 +239,56 @@ function renderSpecies() {
     `${active} / ${DATA.species.length} species selected`;
 }
 
+function togglePair(pid) {
+  if (checkedPairs.has(pid)) checkedPairs.delete(pid); else checkedPairs.add(pid);
+  renderPairs();
+}
+
+function selectAllVisible() {
+  visiblePids.forEach(pid => checkedPairs.add(pid));
+  renderPairs();
+}
+
+function clearPairSelection() {
+  checkedPairs.clear();
+  renderPairs();
+}
+
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: "text/tab-separated-values" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportSelected() {
+  if (checkedPairs.size === 0) {
+    alert("No primer pair selected. Check the box next to each pair you want to export.");
+    return;
+  }
+  // Same layout as write_matrix_tsv(): primer_pair, one column per species, n_species
+  const header = ["primer_pair", ...DATA.species, "n_species"];
+  const lines = [header.join("\t")];
+  const pids = Array.from(checkedPairs).sort();
+  for (const pid of pids) {
+    const spd = DATA.pairs[pid] || {};
+    const row = [pid];
+    for (const sp of DATA.species) {
+      const c = spd[sp] || 0;
+      row.push(c ? String(c) : "");
+    }
+    const nSpecies = Object.keys(spd).filter(sp => spd[sp] > 0).length;
+    row.push(String(nSpecies));
+    lines.push(row.join("\t"));
+  }
+  downloadText("primers_summary_selected.tsv", lines.join("\n") + "\n");
+}
+
 function matchedSpeciesForPair(pid) {
   // species amplified by this pair that ARE selected (checked)
   const res = [];
@@ -252,9 +311,11 @@ function renderPairs() {
   document.getElementById('stats').innerHTML =
     `<span class="stat"><b>${pids.length}</b> pairs</span>
      <span class="stat"><b>${DATA.species.length}</b> species total</span>
-     <span class="stat"><b style="color:var(--good)">${nMatch}</b> pair(s) amplifying a checked species</span>`;
+     <span class="stat"><b style="color:var(--good)">${nMatch}</b> pair(s) amplifying a checked species</span>
+     <span class="stat"><b style="color:var(--accent)">${checkedPairs.size}</b> pair(s) selected for export</span>`;
 
   const visible = onlyMatching ? rows.filter(r => r.n > 0) : rows;
+  visiblePids = visible.map(r => r.pid);
   const html = visible.map(r => {
     const chips = Object.keys(DATA.pairs[r.pid]).sort().map(sp => {
       const sel = selected.has(sp) ? ' selected' : '';
@@ -265,8 +326,12 @@ function renderPairs() {
                           : '<span class="badge">no match</span>';
     const chipsHtml = chips ? `<div class="chips">${chips}</div>`
                             : `<div class="chips"><span class="muted">no species detected</span></div>`;
+    const pairChecked = checkedPairs.has(r.pid) ? 'checked' : '';
     return `<div class="${cls}">
-      <div class="pair-head"><span class="pair-id">${r.pid}</span>${badge}</div>
+      <div class="pair-head">
+        <input type="checkbox" class="pair-check" ${pairChecked} onchange="togglePair('${r.pid.replace(/'/g,"\\'")}')" title="Select for export">
+        <span class="pair-id">${r.pid}</span>${badge}
+      </div>
       ${chipsHtml}
     </div>`;
   }).join('');

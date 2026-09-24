@@ -187,7 +187,7 @@ def parse_auto_args():
               rapid auto ... --primer3-timeout 3600   # 1h per-gene limit
         """),
     )
-
+  
     req = parser.add_argument_group("required arguments")
     req.add_argument("-g", "--genome",     required=True, metavar="FA",
                      help="Reference genome (FASTA).")
@@ -197,9 +197,9 @@ def parse_auto_args():
                      help="Output directory.")
     req.add_argument("-a", "--annot",      metavar="GFF/GTF", default=None,
                      help="annotation whitout isoforme")
-  
-  opt = parser.add_argument_group("optional arguments")
-  opt.add_argument("-p", "--primer3-param", metavar="KEY=VALUE", action="append",
+
+    opt = parser.add_argument_group("optional arguments")
+    opt.add_argument("-p", "--primer3-param", metavar="KEY=VALUE", action="append",
                      default=[], dest="primer3_params",
                      help=("Extra Primer3 global parameter (repeatable). "
                            "E.g. -p \"PRIMER_MIN_SIZE=18\" -p \"PRIMER_MAX_SIZE=27\""))

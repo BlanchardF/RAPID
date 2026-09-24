@@ -4,8 +4,8 @@ RAPID — scripts/check_species_report.py
 ========================================
 Build a cross-pair species summary from ipcress results, plus a self-contained
 interactive HTML page to explore which species each primer pair amplifies and
-to filter species out ("I don't care about this species") to see which pairs
-remain specific.
+to select species of interest ("I care about this species") to see which
+primer pairs amplify them in priority.
 
 Species are parsed from ipcress "Target: ... TSA: Genus species ..." lines,
 exactly as in split_ipcress_by_pair.py (only meaningful for TSA-style DBs).
@@ -145,16 +145,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .legend { color: var(--muted); font-size: 12px; margin: 4px 0 10px; }
   .pair { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
           margin-bottom: 8px; background: var(--panel); }
-  .pair.clean { border-color: var(--good); background: var(--good-bg); }
+  .pair.match { border-color: var(--good); background: var(--good-bg); }
   .pair-head { display: flex; align-items: center; gap: 10px; }
   .pair-id { font-weight: 600; }
   .badge { margin-left: auto; font-size: 12px; padding: 2px 9px; border-radius: 999px;
            background: var(--chip); border: 1px solid var(--line); }
-  .badge.zero { background: var(--good); color: #04220f; border-color: var(--good); font-weight: 700; }
+  .badge.match { background: var(--good); color: #04220f; border-color: var(--good); font-weight: 700; }
   .chips { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip);
           border: 1px solid var(--line); font-style: italic; }
-  .chip.excluded { opacity: .35; text-decoration: line-through; }
+  .chip.selected { border-color: var(--good); color: var(--good); font-weight: 700; font-style: normal; }
   .count-tag { font-style: normal; color: var(--muted); }
   .muted { color: var(--muted); }
   .stat { display: inline-block; margin-right: 16px; }
@@ -165,8 +165,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <body>
 <header>
   <h1>RAPID check — species / pair explorer</h1>
-  <div class="sub">Uncheck species on the left to ignore them ("don't count this one").
-  A pair turns <b style="color:var(--good)">green</b> once it no longer amplifies any checked species.</div>
+  <div class="sub">Check species on the left to bring their matching primer pairs to the top,
+  highlighted in <b style="color:var(--good)">green</b> below.</div>
 </header>
 <div class="layout">
   <aside class="side">
@@ -180,7 +180,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </aside>
   <main class="main">
     <div class="toolbar">
-      <label><input type="checkbox" id="onlyClean" onchange="renderPairs()"> Show only specific pairs (0 checked species)</label>
+      <label><input type="checkbox" id="onlyClean" onchange="renderPairs()"> Show only matching pairs (amplify a checked species)</label>
     </div>
     <div class="legend" id="stats"></div>
     <div id="pairsList"></div>
@@ -190,7 +190,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <script>
 const DATA = __DATA__;
 // DATA = { pairs: { pairId: { "Genus species": count, ... } }, species: [ ... ] }
-const excluded = new Set();   // species the user unchecked (ignored)
+const selected = new Set();   // species the user checked ("I care about this one")
 
 function speciesCounts() {
   // total amplicons per species across all pairs (for display)
@@ -203,13 +203,13 @@ function speciesCounts() {
 const SP_TOTAL = speciesCounts();
 
 function setAll(checked) {
-  excluded.clear();
-  if (!checked) DATA.species.forEach(sp => excluded.add(sp));
+  selected.clear();
+  if (checked) DATA.species.forEach(sp => selected.add(sp));
   renderSpecies(); renderPairs();
 }
 
 function toggle(sp) {
-  if (excluded.has(sp)) excluded.delete(sp); else excluded.add(sp);
+  if (selected.has(sp)) selected.delete(sp); else selected.add(sp);
   renderSpecies(); renderPairs();
 }
 
@@ -218,50 +218,51 @@ function renderSpecies() {
   const list = document.getElementById('speciesList');
   const shown = DATA.species.filter(sp => sp.toLowerCase().includes(q));
   list.innerHTML = shown.map(sp => {
-    const checked = excluded.has(sp) ? '' : 'checked';
+    const checked = selected.has(sp) ? 'checked' : '';
     return `<div class="sp-item">
       <input type="checkbox" ${checked} onchange="toggle('${sp.replace(/'/g,"\\'")}')" id="cb_${btoa(unescape(encodeURIComponent(sp)))}">
       <label for="cb_${btoa(unescape(encodeURIComponent(sp)))}">${sp}</label>
       <span class="cnt">${SP_TOTAL[sp]}</span>
     </div>`;
   }).join('');
-  const active = DATA.species.length - excluded.size;
+  const active = selected.size;
   document.getElementById('spCount').textContent =
-    `${active} / ${DATA.species.length} species counted`;
+    `${active} / ${DATA.species.length} species selected`;
 }
 
-function countedSpeciesForPair(pid) {
-  // species amplified by this pair that are NOT excluded
+function matchedSpeciesForPair(pid) {
+  // species amplified by this pair that ARE selected (checked)
   const res = [];
   for (const sp in DATA.pairs[pid])
-    if (!excluded.has(sp)) res.push([sp, DATA.pairs[pid][sp]]);
+    if (selected.has(sp)) res.push([sp, DATA.pairs[pid][sp]]);
   return res;
 }
 
 function renderPairs() {
-  const onlyClean = document.getElementById('onlyClean').checked;
+  const onlyMatching = document.getElementById('onlyClean').checked;
   const pids = Object.keys(DATA.pairs);
   const rows = pids.map(pid => {
-    const counted = countedSpeciesForPair(pid);
-    return { pid, counted, n: counted.length,
+    const matched = matchedSpeciesForPair(pid);
+    return { pid, matched, n: matched.length,
              all: Object.keys(DATA.pairs[pid]).length };
-  }).sort((a, b) => a.n - b.n || a.pid.localeCompare(b.pid));
+  // more matched (checked) species first, then alphabetical pair id
+  }).sort((a, b) => b.n - a.n || a.pid.localeCompare(b.pid));
 
-  const nClean = rows.filter(r => r.n === 0).length;
+  const nMatch = rows.filter(r => r.n > 0).length;
   document.getElementById('stats').innerHTML =
     `<span class="stat"><b>${pids.length}</b> pairs</span>
      <span class="stat"><b>${DATA.species.length}</b> species total</span>
-     <span class="stat"><b style="color:var(--good)">${nClean}</b> pair(s) with no checked species</span>`;
+     <span class="stat"><b style="color:var(--good)">${nMatch}</b> pair(s) amplifying a checked species</span>`;
 
-  const visible = onlyClean ? rows.filter(r => r.n === 0) : rows;
+  const visible = onlyMatching ? rows.filter(r => r.n > 0) : rows;
   const html = visible.map(r => {
     const chips = Object.keys(DATA.pairs[r.pid]).sort().map(sp => {
-      const ex = excluded.has(sp) ? ' excluded' : '';
-      return `<span class="chip${ex}">${sp} <span class="count-tag">x${DATA.pairs[r.pid][sp]}</span></span>`;
+      const sel = selected.has(sp) ? ' selected' : '';
+      return `<span class="chip${sel}">${sp} <span class="count-tag">x${DATA.pairs[r.pid][sp]}</span></span>`;
     }).join('');
-    const cls = r.n === 0 ? 'pair clean' : 'pair';
-    const badge = r.n === 0 ? '<span class="badge zero">specific</span>'
-                            : `<span class="badge">${r.n} checked species</span>`;
+    const cls = r.n > 0 ? 'pair match' : 'pair';
+    const badge = r.n > 0 ? `<span class="badge match">${r.n} checked species</span>`
+                          : '<span class="badge">no match</span>';
     const chipsHtml = chips ? `<div class="chips">${chips}</div>`
                             : `<div class="chips"><span class="muted">no species detected</span></div>`;
     return `<div class="${cls}">
@@ -295,11 +296,14 @@ def write_html(pairs, all_species, out_html):
 # ---------------------------------------------------------------------------
 
 def main():
-    if len(sys.argv) != 4:
-        print(f"Usage: {sys.argv[0]} <input_dir_or_file> <out_tsv> <out_html>",
+    if len(sys.argv) not in (3, 4):
+        print(f"Usage: {sys.argv[0]} <input_dir_or_file> <out_tsv> [out_html]",
+              file=sys.stderr)
+        print("  out_html defaults to 'species_explorer.html' if omitted.",
               file=sys.stderr)
         sys.exit(1)
-    input_path, out_tsv, out_html = sys.argv[1:4]
+    input_path, out_tsv = sys.argv[1:3]
+    out_html = sys.argv[3] if len(sys.argv) == 4 else "species_explorer.html"
 
     pairs = load_pairs(input_path)
     all_species = sorted({sp for spd in pairs.values() for sp in spd})

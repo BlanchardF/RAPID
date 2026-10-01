@@ -10,6 +10,49 @@ PRIMER3_EXTRA   = config.get("primer3_extra_params", [])   # list of "KEY=VALUE"
 PRIMER3_JOBS    = config.get("primer3_jobs", THREADS)       # parallel primer3 processes
 PRIMER3_TIMEOUT = config.get("primer3_timeout", 7200)       # per-gene timeout (s), 0 = off
 
+# ── Probe (internal oligo) design — enabled by `rapid auto --probe` ─────────
+DESIGN_PROBE     = config.get("design_probe", False)
+PROBE_SIZE_MIN   = config.get("probe_size_min", 18)
+PROBE_SIZE_MAX   = config.get("probe_size_max", 30)
+PROBE_TM_OFF_MIN = config.get("probe_tm_offset_min", 8)
+PROBE_TM_OFF_MAX = config.get("probe_tm_offset_max", 10)
+
+
+def _extra_param_value(params_list, key, default):
+    """Read KEY=VALUE from the user's -p list, else return default."""
+    for p in params_list:
+        k, _, v = p.partition("=")
+        if k == key:
+            try:
+                return float(v)
+            except ValueError:
+                pass
+    return default
+
+
+def _add_default_params(params_list, defaults):
+    """Append DEFAULT KEY=VALUE entries the user hasn't already set via -p."""
+    existing_keys = {p.partition("=")[0] for p in params_list}
+    return params_list + [d for d in defaults if d.partition("=")[0] not in existing_keys]
+
+
+if DESIGN_PROBE:
+    _primer_opt_tm = _extra_param_value(PRIMER3_EXTRA, "PRIMER_OPT_TM", 60.0)
+    _probe_min_tm  = _primer_opt_tm + PROBE_TM_OFF_MIN
+    _probe_max_tm  = _primer_opt_tm + PROBE_TM_OFF_MAX
+    _probe_opt_tm  = (_probe_min_tm + _probe_max_tm) / 2.0
+
+    PRIMER3_EXTRA = _add_default_params(PRIMER3_EXTRA, [
+        "PRIMER_PICK_INTERNAL_OLIGO=1",
+        f"PRIMER_INTERNAL_MIN_SIZE={PROBE_SIZE_MIN}",
+        f"PRIMER_INTERNAL_MAX_SIZE={PROBE_SIZE_MAX}",
+        f"PRIMER_INTERNAL_OPT_SIZE={(PROBE_SIZE_MIN + PROBE_SIZE_MAX) // 2}",
+        f"PRIMER_INTERNAL_MIN_TM={_probe_min_tm}",
+        f"PRIMER_INTERNAL_MAX_TM={_probe_max_tm}",
+        f"PRIMER_INTERNAL_OPT_TM={_probe_opt_tm}",
+        "PRIMER_NUM_RETURN=5",
+    ])
+
 
 # =============================================================================
 # DESeq2 normalization, top-N gene selection, BED + Primer3 preconfig
@@ -126,10 +169,32 @@ rule primer3:
 
 
 # =============================================================================
+# When --probe is on: among the candidate pairs Primer3 returned for each
+# gene/junction, pick the best-ranked one whose probe does NOT start with a
+# 5' G (falls back to the best pair overall if none qualifies).
+# =============================================================================
+if DESIGN_PROBE:
+    rule select_probe_candidate:
+        input:  raw = f"{OUT}/primer3/results/primer3_raw_results.txt"
+        output: sel = f"{OUT}/primer3/results/primer3_raw_results.probe_selected.txt"
+        log:    f"{OUT}/logs/select_probe_candidate.log"
+        params:
+            script = str(SCRIPTS_DIR / "select_probe_candidate.py"),
+        shell:
+            """
+            python3 {params.script} {input.raw} {output.sel} &> {log}
+            """
+
+    TOPN_INPUT = f"{OUT}/primer3/results/primer3_raw_results.probe_selected.txt"
+else:
+    TOPN_INPUT = f"{OUT}/primer3/results/primer3_raw_results.txt"
+
+
+# =============================================================================
 # Select top N primer pairs ranked by penalty
 # =============================================================================
 rule primer3_top_n:
-    input:  raw  = f"{OUT}/primer3/results/primer3_raw_results.txt"
+    input:  raw  = TOPN_INPUT
     output: best = f"{OUT}/primer3/results/best_primers.txt"
     log:    f"{OUT}/logs/primer3_top_n.log"
     params: top_n = config.get("top_primers", 10)

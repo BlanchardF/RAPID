@@ -29,7 +29,7 @@
 ```                          
 
 
-RAPID designs exon–exon **junction-spanning** PCR primers directly from a genome and RNA-seq data. Because each primer sits across a spliced junction, it amplifies mature mRNA but not the corresponding genomic (intron-containing) DNA — ideal for RNA-based assays (RT-PCR, RT-qPCR, ddPCR, eRNA).
+RAPID designs exon–exon **junction-spanning** PCR primers directly from a genome and RNA-seq data. Because each primer sits across a spliced junction, it amplifies mature mRNA but not the corresponding genomic (intron-containing) DNA — ideal for RNA-based assays (RT-PCR, RT-qPCR, ddPCR, eRNA). An internal hybridization **probe** (TaqMan-style) can optionally be designed alongside the primers with `--probe`.
 
 The pipeline is built on [Snakemake](https://snakemake.readthedocs.io) and ships as a single command-line tool, `rapid`, with all dependencies pinned in one conda environment.
 
@@ -79,6 +79,9 @@ conda activate rapid
 # 1) Full pipeline, using a provided annotation (recommended)
 rapid auto -g genome.fa -r reads_R1.fq.gz reads_R2.fq.gz -o results/ -a annotation.gtf
 
+# 1bis) Same, also designing a hybridization probe (TaqMan-style) per amplicon
+rapid auto -g genome.fa -r reads_R1.fq.gz reads_R2.fq.gz -o results/ -a annotation.gtf --probe
+
 # 2) Stage-specific primers (reference vs. others), depth-normalised enrichment
 rapid track -g genome.fa -o results_track/ -a annotation.gtf \
     --filter cpm --min-cpm-ref 1 --fold-change 10 \
@@ -95,7 +98,7 @@ Run `rapid <mode> --help` for the full option list of each mode.
 ## Key outputs
 
 - `primer3/results/best_primers.txt` — top primer pairs (Primer3 format)
-- `primer3/results/primers_summary.tsv` — one row per pair (sequences, Tm, GC%, product size, penalty)
+- `primer3/results/primers_summary.tsv` — one row per pair (sequences, Tm, GC%, product size, penalty, and — with `--probe` — the matching probe's sequence, Tm and size). See **MANUAL.en.md §5** for a full column-by-column description.
 - `primer3/results/primer_report.tsv` and `primer_report.html` *(track mode)* — primers enriched with per-stage expression (CPM), enrichment fold-change and amplicon size, plus an **interactive explorer** to sort, filter and shortlist candidates
 - `check/species_by_pair.tsv` and `species_explorer.html` *(check mode, TSA)* — which species each pair amplifies, with an interactive filter
 

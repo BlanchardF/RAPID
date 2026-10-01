@@ -26,6 +26,13 @@ FIELDS = [
     "PRIMER_PAIR_0_COMPL_END_TH",
     "PRIMER_PAIR_0_PRODUCT_SIZE",
     "PRIMER_PAIR_0_PRODUCT_TM",
+    # Probe / internal oligo — only present when `rapid auto --probe` was used.
+    "PRIMER_INTERNAL_0_SEQUENCE",
+    "PRIMER_INTERNAL_0_TM",
+    "PRIMER_INTERNAL_0_GC_PERCENT",
+    "PRIMER_INTERNAL_0_SELF_ANY_TH",
+    "PRIMER_INTERNAL_0_SELF_END_TH",
+    "PRIMER_INTERNAL_0_HAIRPIN_TH",
 ]
 
 
@@ -114,6 +121,35 @@ def amplicon_info(rec):
     return amp, gc_pct
 
 
+def probe_info(rec):
+    """
+    Return (Probe_Size, Probe_Tm_Offset_vs_Primers, Probe_Starts_With_G) for
+    the internal oligo (probe) of this record, or ("NA", "NA", "NA") when no
+    probe was designed (e.g. `rapid auto` was run without --probe, or Primer3
+    could not find a suitable internal oligo for this gene/junction).
+
+    Probe_Tm_Offset_vs_Primers = probe Tm - mean(left Tm, right Tm), i.e. how
+    many °C above the primers the probe's Tm actually landed — this is what
+    should sit in the +8 to +10°C window targeted by --probe-tm-offset-*.
+    """
+    seq = rec.get("PRIMER_INTERNAL_0_SEQUENCE")
+    if not seq:
+        return "NA", "NA", "NA"
+
+    size = len(seq)
+    starts_with_g = "yes" if seq.upper().startswith("G") else "no"
+
+    try:
+        tm_probe = float(rec.get("PRIMER_INTERNAL_0_TM", ""))
+        tm_left  = float(rec.get("PRIMER_LEFT_0_TM", ""))
+        tm_right = float(rec.get("PRIMER_RIGHT_0_TM", ""))
+        offset = round(tm_probe - (tm_left + tm_right) / 2.0, 1)
+    except ValueError:
+        offset = "NA"
+
+    return size, offset, starts_with_g
+
+
 def quality_flag(rec):
     """
     Automatic quality assessment:
@@ -160,6 +196,9 @@ def main():
             "Left_bases_after_junction",
             "Right_bases_before_junction",
             "Right_bases_after_junction",
+            "Probe_Size",
+            "Probe_Tm_Offset_vs_Primers",
+            "Probe_Starts_With_G",
         ]
     )
 
@@ -182,6 +221,9 @@ def main():
             # Amplicon sequence + GC%
             amp_seq, amp_gc = amplicon_info(b)
 
+            # Probe (internal oligo), if any — see probe_info() docstring.
+            probe_size, probe_tm_offset, probe_starts_g = probe_info(b)
+
             row = (
                 [seq_id, gene, junction, quality_flag(b)]
                 + [b.get(f, "NA") for f in FIELDS]
@@ -192,6 +234,9 @@ def main():
                     ov["left_after"],
                     ov["right_before"],
                     ov["right_after"],
+                    probe_size,
+                    probe_tm_offset,
+                    probe_starts_g,
                 ]
             )
             out.write("\t".join(str(x) for x in row) + "\n")

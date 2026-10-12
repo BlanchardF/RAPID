@@ -162,6 +162,8 @@ exons_bed <- count_table_clean_multiexon %>%
     End     = as.numeric(End),
     Exon_ID = paste(Geneid, Chr, Start + 1, sep = EXON_ID_SEP)
   ) %>%
+  arrange(match(Geneid, unique(Geneid)),
+          if_else(Strand == "+", Start, -Start)) %>%
   select(Chr, Start, End, Exon_ID, Geneid, Strand)
 
 write.table(exons_bed, out_bed,

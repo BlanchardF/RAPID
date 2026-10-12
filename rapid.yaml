@@ -10,9 +10,6 @@ dependencies:
   # Python
   - python>=3.9
   - pyyaml
-  # Annotation
-  - braker3
-  - augustus
   # Alignment
   - hisat2>=2.2
   - samtools>=1.17

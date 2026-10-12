@@ -56,7 +56,7 @@ Starting from a reference genome + RNA-seq reads, RAPID aligns the reads, quanti
 - RNA-seq reads (FASTQ, single- or paired-end)
 - A annotation whitout isoforme. **GTF ** (see the manual)
 
-  manuel a update pour isoforme avec :  agat_sp_keep_longest_isoform.pl --gff braker.gtf -o annotation.longest.gtf  
+  manuel a update pour isoforme avec :  agat_sp_keep_longest_isoform.pl --gff annot_no_isoforme.gtf -o annotation.longest.gtf  
 
 ## Installation
 
@@ -71,7 +71,7 @@ rapid install          # or: python rapid.py install
 conda activate rapid
 ```
 
-`rapid install` looks for `rapid.yaml` and creates the `rapid` environment (HISAT2, SAMtools, Subread/featureCounts, BEDTools, Primer3, GNU Parallel, exonerate/ipcress, BRAKER3, R + DESeq2, …).
+`rapid install` looks for `rapid.yaml` and creates the `rapid` environment (HISAT2, SAMtools, Subread/featureCounts, BEDTools, Primer3, GNU Parallel, exonerate/ipcress, R + DESeq2, …).
 
 ## Quick start
 

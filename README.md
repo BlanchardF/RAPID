@@ -104,7 +104,7 @@ Run `rapid <mode> --help` for the full option list of each mode.
 
 ## Documentation
 
-See **MANUAL.en.md** for the full tutorial: concepts, every option, choosing thresholds, the interactive reports, reproducibility notes, running several analyses in parallel, and troubleshooting.
+See **MANUAL.md** for the full tutorial: concepts, every option, choosing thresholds, the interactive reports, reproducibility notes, running several analyses in parallel, and troubleshooting.
 
 ## License / citation
 

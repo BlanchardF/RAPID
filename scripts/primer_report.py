@@ -137,6 +137,37 @@ def fnum(block, key, default=""):
         return default
 
 
+def probe_info(block):
+    """
+    Mirror of primer3_summary.py's probe_info(): returns a dict with the
+    probe (internal oligo) sequence/Tm/GC%/size and, when both primer Tm
+    values are available, the *actual* Tm offset obtained vs. the primers.
+    All values are None when no probe was designed (e.g. `--probe` was not
+    used, or Primer3 could not find a suitable internal oligo).
+    """
+    seq = block.get("PRIMER_INTERNAL_0_SEQUENCE")
+    if not seq:
+        return {"seq": None, "tm": None, "gc": None, "size": None,
+                "tm_offset": None, "starts_with_g": None}
+
+    tm = fnum(block, "PRIMER_INTERNAL_0_TM", None)
+    gc = fnum(block, "PRIMER_INTERNAL_0_GC_PERCENT", None)
+    tm_left = fnum(block, "PRIMER_LEFT_0_TM", None)
+    tm_right = fnum(block, "PRIMER_RIGHT_0_TM", None)
+    tm_offset = None
+    if isinstance(tm, float) and isinstance(tm_left, float) and isinstance(tm_right, float):
+        tm_offset = round(tm - (tm_left + tm_right) / 2.0, 1)
+
+    return {
+        "seq": seq,
+        "tm": round(tm, 1) if isinstance(tm, float) else None,
+        "gc": round(gc, 1) if isinstance(gc, float) else None,
+        "size": len(seq),
+        "tm_offset": tm_offset,
+        "starts_with_g": seq.upper().startswith("G"),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Build records
 # ---------------------------------------------------------------------------
@@ -171,6 +202,7 @@ def build_records(results_dir):
         max_other = max((v for _, v in stage_cpm), default=0.0)
         limiting = max(stage_cpm, key=lambda x: x[1])[0] if stage_cpm else ""
         enrichment = float("inf") if max_other <= 0 else rcpm / max_other
+        probe = probe_info(b)
         records.append({
             "gene": gene, "junction": junction_of(sid), "seq_id": sid,
             "amplicon_bp": int(fnum(b, "PRIMER_PAIR_0_PRODUCT_SIZE", 0) or 0),
@@ -185,6 +217,13 @@ def build_records(results_dir):
             "stage_cpm": [{"stage": lbl, "cpm": round(v, 1)} for lbl, v in stage_cpm],
             "enrichment": (None if math.isinf(enrichment) else round(enrichment, 1)),
             "limiting_stage": limiting,
+            # Probe (internal oligo) — only set when `rapid track --probe` was used.
+            "probe_seq": probe["seq"],
+            "probe_tm": probe["tm"],
+            "probe_gc": probe["gc"],
+            "probe_size": probe["size"],
+            "probe_tm_offset": probe["tm_offset"],
+            "probe_starts_with_g": probe["starts_with_g"],
         })
     return records, ref_label, [lbl for _, _, lbl, _ in others]
 
@@ -196,6 +235,8 @@ def build_records(results_dir):
 def write_tsv(records, ref_label, other_labels, out_tsv):
     cols = (["gene", "junction", "amplicon_bp", "enrichment_fold", "limiting_stage",
              "penalty", "fwd", "rev", "fwd_tm", "rev_tm", "fwd_gc", "rev_gc",
+             "probe_seq", "probe_tm", "probe_gc", "probe_size", "probe_tm_offset",
+             "probe_starts_with_g",
              f"cpm_{ref_label}"] + [f"cpm_{l}" for l in other_labels])
     Path(out_tsv).parent.mkdir(parents=True, exist_ok=True)
     with open(out_tsv, "w") as fh:
@@ -203,9 +244,18 @@ def write_tsv(records, ref_label, other_labels, out_tsv):
         for r in records:
             stage_map = {d["stage"]: d["cpm"] for d in r["stage_cpm"]}
             enr = "inf" if r["enrichment"] is None else r["enrichment"]
+
+            def na(v):
+                return "NA" if v is None else v
+
             row = [r["gene"], r["junction"], r["amplicon_bp"], enr, r["limiting_stage"],
                    r["penalty"], r["fwd"], r["rev"], r["fwd_tm"], r["rev_tm"],
-                   r["fwd_gc"], r["rev_gc"], r["cpm_ref"]]
+                   r["fwd_gc"], r["rev_gc"],
+                   na(r["probe_seq"]), na(r["probe_tm"]), na(r["probe_gc"]),
+                   na(r["probe_size"]), na(r["probe_tm_offset"]),
+                   ("NA" if r["probe_starts_with_g"] is None
+                    else ("yes" if r["probe_starts_with_g"] else "no")),
+                   r["cpm_ref"]]
             row += [stage_map.get(l, 0.0) for l in other_labels]
             fh.write("\t".join(str(x) for x in row) + "\n")
 
@@ -290,6 +340,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <th>GC% (F/R)</th>
       <th>primers</th>
       <th></th>
+      <th></th>
     </tr></thead>
     <tbody id="tbody"></tbody>
   </table>
@@ -363,6 +414,7 @@ function render(){
       <td>${r.fwd_tm} / ${r.rev_tm}</td>
       <td>${r.fwd_gc} / ${r.rev_gc}</td>
       <td class="seq">${r.fwd}<br>${r.rev}</td>
+      <td>${r.probe_seq ? `<span class="pill" title="${r.probe_seq}">probe</span>` : ""}</td>
       <td class="expand" data-i="${idx}">details &#9662;</td>`;
     tb.appendChild(tr);
 
@@ -376,8 +428,14 @@ function render(){
           +`<div class="track"><div class="fill" style="width:${barWidth(s.cpm,max)}%"></div></div>`
           +`<div class="val">${s.cpm} CPM</div></div>`;
     }
-    det.innerHTML=`<td colspan="10"><div class="bars">${bars}</div>
-      <div class="sub" style="margin-top:8px">amplicon ${r.amplicon_bp} bp — enrichment ${enrText(r)} vs the most expressed stage (${r.limiting_stage||"none"})</div></td>`;
+    const probeLine = r.probe_seq
+      ? `Probe: <span class="seq">${r.probe_seq}</span> — Tm ${r.probe_tm}\u00b0C `
+        +`(offset ${r.probe_tm_offset>=0?"+":""}${r.probe_tm_offset}\u00b0C vs primers), `
+        +`${r.probe_size} nt, GC ${r.probe_gc}%, 5'G: ${r.probe_starts_with_g?"yes":"no"}`
+      : `Probe: none (run with --probe to design one)`;
+    det.innerHTML=`<td colspan="11"><div class="bars">${bars}</div>
+      <div class="sub" style="margin-top:8px">amplicon ${r.amplicon_bp} bp — enrichment ${enrText(r)} vs the most expressed stage (${r.limiting_stage||"none"})</div>
+      <div class="sub" style="margin-top:4px">${probeLine}</div></td>`;
     tb.appendChild(det);
 
     tr.querySelector('.expand').addEventListener('click',()=>{ det.style.display = det.style.display==="none" ? "" : "none"; });
@@ -391,14 +449,20 @@ function downloadSelection(){
   const wasShown=showHidden; showHidden=false;
   const rows=visibleRows(); showHidden=wasShown;
   const cols=["gene","junction","amplicon_bp","enrichment_fold","limiting_stage","penalty",
-              "fwd","rev","fwd_tm","rev_tm","fwd_gc","rev_gc","cpm_"+DATA.ref_label]
+              "fwd","rev","fwd_tm","rev_tm","fwd_gc","rev_gc",
+              "probe_seq","probe_tm","probe_gc","probe_size","probe_tm_offset","probe_starts_with_g",
+              "cpm_"+DATA.ref_label]
               .concat(DATA.other_labels.map(l=>"cpm_"+l));
   let out=cols.join("\t")+"\n";
+  const na = v => (v===null || v===undefined) ? "NA" : v;
   for(const r of rows){
     const sm={}; r.stage_cpm.forEach(d=>sm[d.stage]=d.cpm);
     const enr = r.enrichment===null ? "inf" : r.enrichment;
     let row=[r.gene,r.junction,r.amplicon_bp,enr,r.limiting_stage,r.penalty,
-             r.fwd,r.rev,r.fwd_tm,r.rev_tm,r.fwd_gc,r.rev_gc,r.cpm_ref]
+             r.fwd,r.rev,r.fwd_tm,r.rev_tm,r.fwd_gc,r.rev_gc,
+             na(r.probe_seq),na(r.probe_tm),na(r.probe_gc),na(r.probe_size),na(r.probe_tm_offset),
+             (r.probe_starts_with_g===null||r.probe_starts_with_g===undefined) ? "NA" : (r.probe_starts_with_g?"yes":"no"),
+             r.cpm_ref]
              .concat(DATA.other_labels.map(l=>sm[l]!==undefined?sm[l]:0));
     out+=row.join("\t")+"\n";
   }

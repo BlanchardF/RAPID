@@ -427,6 +427,17 @@ def parse_track_args():
                      help="Maximum amplicon size for Primer3. Default: 200.")
     opt.add_argument("--top-primers", type=int, default=10, metavar="INT",
                      help="Number of best primer pairs to keep. Default: 10.")
+    opt.add_argument("--probe", action="store_true",
+                     help="Also design an internal hybridization probe (TaqMan-style) "
+                          "alongside the primers, for each amplicon.")
+    opt.add_argument("--probe-size-min", type=int, default=18, metavar="INT",
+                     help="Minimum probe size (nt). Default: 18.")
+    opt.add_argument("--probe-size-max", type=int, default=30, metavar="INT",
+                     help="Maximum probe size (nt). Default: 30.")
+    opt.add_argument("--probe-tm-offset-min", type=float, default=8.0, metavar="FLOAT",
+                     help="Minimum Tm offset (°C) of the probe above the primers. Default: 8.")
+    opt.add_argument("--probe-tm-offset-max", type=float, default=10.0, metavar="FLOAT",
+                     help="Maximum Tm offset (°C) of the probe above the primers. Default: 10.")
     opt.add_argument("--primer3-jobs", type=int, default=None, metavar="INT",
                      help="Parallel Primer3 jobs (default: same as --threads).")
     opt.add_argument("--primer3-timeout", type=int, default=7200, metavar="SECONDS",
@@ -489,6 +500,18 @@ def validate_track(args):
     if ex_err:
         errors.append(ex_err)
 
+    if args.probe:
+        if args.probe_size_min >= args.probe_size_max:
+            errors.append(
+                f"--probe-size-min ({args.probe_size_min}) must be smaller than "
+                f"--probe-size-max ({args.probe_size_max})."
+            )
+        if args.probe_tm_offset_min > args.probe_tm_offset_max:
+            errors.append(
+                f"--probe-tm-offset-min ({args.probe_tm_offset_min}) must be <= "
+                f"--probe-tm-offset-max ({args.probe_tm_offset_max})."
+            )
+
     if errors:
         print("\n[RAPID track] Input errors:", file=sys.stderr)
         for e in errors:
@@ -538,6 +561,11 @@ def build_track_config(args):
         "primer3_jobs":         args.primer3_jobs if args.primer3_jobs else args.threads,
         "primer3_timeout":      args.primer3_timeout,
         "threads":              args.threads,
+        "design_probe":          args.probe,
+        "probe_size_min":        args.probe_size_min,
+        "probe_size_max":        args.probe_size_max,
+        "probe_tm_offset_min":   args.probe_tm_offset_min,
+        "probe_tm_offset_max":   args.probe_tm_offset_max,
     }
 
 
@@ -567,6 +595,10 @@ def run_track():
     print(f"  Primer3 t/o  : {timeout_label} (per gene)")
     if args.primer3_params:
         print(f"  Primer3 extra: {', '.join(args.primer3_params)}")
+    if args.probe:
+        print(f"  Probe design : ON  "
+              f"({args.probe_size_min}-{args.probe_size_max} nt, "
+              f"Tm +{args.probe_tm_offset_min}/+{args.probe_tm_offset_max}°C vs primers)")
     print()
 
     validate_track(args)

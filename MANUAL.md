@@ -321,7 +321,7 @@ The right primer is written **reverse-complemented**, so that every sequence of 
 
 ## 10. Choosing and verifying primers by hand
 
-The automatic `Quality` flag, the primer report (§7) and `check` (§8) narrow the list down, but before ordering oligos it is worth looking at a few finalists yourself. Three independent checks are recommended: the junction placement (SeaView), the specificity (NCBI BLAST), and — optionally — the in-silico PCR of `check`.
+The automatic `Quality` flag, the primer report (§7) and `check` (§8) narrow the list down, but before ordering oligos it is worth looking at a few finalists yourself. Three checks are recommended: a BLAST sanity check (NCBI), the junction placement (SeaView), and — optionally — the in-silico PCR of `check`.
 
 ### Step 1 — Shortlist candidates
 
@@ -335,21 +335,13 @@ rapid fetch_gene -d results/ -g <gene> -j <junction>
 
 (see §9). Open `<gene>_j<N>_report.txt` to get the amplicon and the exon sequences, and keep `<gene>_j<N>_for_align.txt` for step 4.
 
-### Step 3 — Check specificity with NCBI BLAST
+### Step 3 — Sanity-check the gene with NCBI BLAST
 
-The goal is to make sure the pair amplifies **your gene only** — not a paralog, a homologous gene of the same family, or a sequence from the host or a closely related species that could be present in your sample.
+Go to [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) and run `blastn` and/or `blastx` with the amplicon (or the mRNA sequence from the report). Check whether the hits are consistent with your species. If the gene is known, this can help you choose between candidates.
 
-1. Go to [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) and choose **Nucleotide BLAST** (`blastn`).
-2. **Amplicon (or spliced mRNA region):** paste the `Amplicon_Sequence` from the report. Restrict the search with the *Organism* box to your species first (is the target unique in its own genome/transcriptome?), then repeat with the organisms you want to exclude (host, related species, contaminants). Use the nucleotide collection or, if available for your organism, a RefSeq RNA / genome database.
-3. **Primers and probe:** they are too short for default BLAST parameters. Either choose the *short input* (`blastn-short`) program/option, or use NCBI **Primer-BLAST**, which takes the forward and reverse primers together and reports the products they could amplify in the database you choose.
-4. Read the result:
-   - the **target gene** must be the best hit, with ~100 % identity over the whole amplicon;
-   - any other hit with high identity on **both** primers and a plausible product size is a potential off-target;
-   - a primer that matches another sequence with a perfect 3′ end is more worrying than one with mismatches at its 3′ end.
+No hit is possible, especially if you work on a non-model species.
 
-> A BLAST against the genome is also informative: if the amplicon aligns as one perfect, uninterrupted match, the sequence is probably intronless (or a processed pseudogene) and the pair would not discriminate mRNA from genomic DNA. A genuine junction-spanning amplicon is split by the intron on the genome. Step 4 checks the junction placement directly.
-
-*(Optional: add screenshots of a clean BLAST result here — `docs/images/blast_example.png`.)*
+![BLASTn / BLASTx example](docs/images/blast_example.png)
 
 ### Step 4 — Check the junction placement in SeaView
 
@@ -377,7 +369,7 @@ The goal is to make sure the pair amplifies **your gene only** — not a paralog
 
 ### Step 5 — Decide
 
-Keep the pairs that (i) straddle a junction in SeaView, (ii) hit only the intended gene in BLAST / Primer-BLAST, and (iii) are clean in `check` (§8) if you ran it. Only then order the oligos, and validate them experimentally (e.g. a no-RT control and a gDNA control).
+Keep the pairs that (i) straddle a junction in SeaView, (ii) give BLAST hits consistent with your species when the gene is known, and (iii) are clean in `check` (§8) if you ran it. Only then order the oligos, and validate them experimentally (e.g. a no-RT control and a gDNA control).
 
 ---
 

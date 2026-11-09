@@ -46,6 +46,7 @@ Starting from a reference genome + RNA-seq reads, RAPID aligns the reads, quanti
 | `auto`    | Full pipeline from one RNA-seq sample → ranked junction-spanning primers |
 | `track`   | Like `auto`, but keeps only genes **specific to a reference** stage/condition (one reference sample vs. several others) |
 | `check`   | Validates candidate primers by in-silico PCR (ipcress) against a sequence database, with an optional species/biogeography report |
+| `fetch_gene` | Extracts the exons, spliced mRNA, amplicon, primers and probe of a gene/junction → text report + FASTA file to align in SeaView and to BLAST on NCBI |
 | `install` | Creates or updates the `rapid` conda environment |
 | `clean`   | Clears Snakemake metadata for a fresh re-run |
 
@@ -91,6 +92,9 @@ rapid track -g genome.fa -o results_track/ -a annotation.gtf \
 
 # 3) In-silico validation of the designed primers against a TSA database
 rapid check -i results_track/ -tsa /path/to/tsa/nucl/ --maps
+
+# 4) Inspect a candidate by hand: exons, mRNA, amplicon, primers (+ FASTA for SeaView)
+rapid fetch_gene -d results_track/ -g g9316 -j 183
 ```
 
 Run `rapid <mode> --help` for the full option list of each mode.
@@ -98,9 +102,22 @@ Run `rapid <mode> --help` for the full option list of each mode.
 ## Key outputs
 
 - `primer3/results/best_primers.txt` — top primer pairs (Primer3 format)
-- `primer3/results/primers_summary.tsv` — one row per pair (sequences, Tm, GC%, product size, penalty, and — with `--probe` — the matching probe's sequence, Tm and size). See **MANUAL.en.md §5** for a full column-by-column description.
+- `primer3/results/primers_summary.tsv` — one row per pair (sequences, Tm, GC%, product size, penalty, and — with `--probe` — the matching probe's sequence, Tm and size). See **MANUAL.md §5** for a full column-by-column description.
 - `primer3/results/primer_report.tsv` and `primer_report.html` *(track mode)* — primers enriched with per-stage expression (CPM), enrichment fold-change and amplicon size, plus an **interactive explorer** to sort, filter and shortlist candidates
+- `Find_genes/<gene>_j<N>_report.txt` and `<gene>_j<N>_for_align.txt` *(fetch_gene mode)* — exon/mRNA/amplicon/primer sequences of a candidate, and a multi-FASTA to align in SeaView
 - `check/species_by_pair.tsv` and `species_explorer.html` *(check mode, TSA)* — which species each pair amplifies, with an interactive filter
+
+## Choosing and verifying primers by hand
+
+Before ordering oligos, check your finalists:
+
+1. `rapid fetch_gene -d results/ -g <gene> -j <junction>` → sequences + `*_for_align.txt`
+2. **BLAST** the amplicon / use **Primer-BLAST** on NCBI to confirm the pair hits only your gene
+3. Open `*_for_align.txt` in **SeaView**, align it, and verify that a primer straddles the exon–exon junction with no mismatch
+
+![Good alignment: a primer straddling an exon–exon junction](docs/images/seaview_good_alignment.png)
+
+Step-by-step instructions: **MANUAL.md §9–§10**.
 
 ## Documentation
 

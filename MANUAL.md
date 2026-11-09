@@ -2,7 +2,7 @@
 
 **R**NA **A**utomated **P**rimer **I**dentification and **D**esign
 
-This manual covers concepts, installation, every mode and option, choosing filter thresholds, the interactive reports, reproducibility, parallel runs, and troubleshooting. For a short overview see `README.en.md`.
+This manual covers concepts, installation, every mode and option, choosing filter thresholds, checking candidate primers by hand (`fetch_gene`, BLAST, SeaView), the interactive reports, reproducibility, parallel runs, and troubleshooting. For a short overview see `README.md`.
 
 ---
 
@@ -21,7 +21,7 @@ Pipeline (mode `auto`):
 5. **Primer3** — one config per gene, run in parallel (GNU Parallel), with a per-gene timeout. With `--probe`, an internal hybridization probe is designed alongside each pair.
 6. **Ranking & summary** — best pairs by penalty → `best_primers.txt` + `primers_summary.tsv` (column reference in §5).
 
-`track` inserts a reference-specificity filter between steps 3 and 4; everything downstream is identical. `check` is a separate validation workflow.
+`track` inserts a reference-specificity filter between steps 3 and 4; everything downstream is identical. `check` and `fetch_gene` are separate validation/inspection workflows (§8, §9).
 
 ---
 
@@ -35,7 +35,7 @@ conda activate rapid
 
 The `rapid` environment contains: Snakemake, HISAT2, SAMtools, Subread (featureCounts), BEDTools, Primer3, GNU Parallel, exonerate (provides `ipcress`), R with DESeq2/dplyr/tidyr, and folium (biogeography maps).
 
-**AGAT (for GFF3 → GTF conversion and for Remove the isoforms from the annotation) is intentionally NOT in this environment** — it pulls a large Perl stack that conflicts with the pinned dependencies. Install it in its own environment when needed (see §10).
+**AGAT (for GFF3 → GTF conversion and for Remove the isoforms from the annotation) is intentionally NOT in this environment** — it pulls a large Perl stack that conflicts with the pinned dependencies. Install it in its own environment when needed (see §12).
 
 
 ---
@@ -49,12 +49,12 @@ gunzip -k genome.fa.gz        # keep the .gz, produce genome.fa
 ```
 
 **Annotation without isoform** — **GTF preferred**. RAPID detects the format from the file extension:
-- `.gtf` → featureCounts uses `-g gene_id`, and reproducible splice sites are extracted for HISAT2 (see §11).
+- `.gtf` → featureCounts uses `-g gene_id`, and reproducible splice sites are extracted for HISAT2 (see §13).
 - `.gff/.gff3` → featureCounts uses `-g Parent` (aggregates per **transcript**, not per gene) and the HISAT2 reproducibility safeguard is skipped.
 
-If your annotation is GFF3, convert it to GTF first (see §10).
+If your annotation is GFF3, convert it to GTF first (see §12).
 
-If your annotation has isoforme, use AGAT (see §10).
+If your annotation has isoforme, use AGAT (see §12).
 
 **RNA-seq reads** — FASTQ(.gz). One file = single-end; two files (R1 R2) = paired-end.
 
@@ -272,7 +272,116 @@ With a TSA database, `check` extracts the species behind each hit and writes:
 
 ---
 
-## 9. Modes `install` and `clean`
+## 9. Mode `fetch_gene` — inspect a gene and its primers
+
+`fetch_gene` rebuilds, for a gene/junction you are interested in, everything needed to look at it by hand: the exon sequences, the reconstructed spliced mRNA, and the amplicon, primers and probe chosen by RAPID. It also writes a FASTA file that can be opened directly in [SeaView](https://doua.prabi.fr/software/seaview) to check, on an alignment, that the primers really sit on an exon–exon junction. It is the starting point of the manual validation workflow described in §10.
+
+```bash
+# one gene, one junction
+rapid fetch_gene -d results/ -g g9316 -j 183
+
+# every junction of one gene
+rapid fetch_gene -d results/ -g g9316
+
+# every gene/junction listed in primers_summary.tsv
+rapid fetch_gene -d results/
+```
+
+Works on the output directory of `auto` **and** `track`. Run it inside the `rapid` conda environment (it needs `samtools`, or `pyfaidx` as a fallback).
+
+### Options
+
+| Option | Meaning |
+|--------|---------|
+| `-d, --dir` | RAPID results directory (the one given to `-o` for `auto`/`track`). **Required.** |
+| `-g, --gene` | Gene ID. `g9316`, `9316` and `gene:g9316` are treated as the same gene; IDs such as `Smp_123456` are kept as is. Without `-g`, all genes are processed. |
+| `-j, --junction` | Junction position, as in the `Junction` column of `primers_summary.tsv` (§5). Requires `-g`. Without `-j`, all junctions of the selected gene(s) are processed. |
+
+### How it works
+
+- Reads `rapid_config.yaml` (or `rapid_track_config.yaml`) to find the genome, and whether a probe was designed (`design_probe`).
+- Reads the primers from `primer3/results/primers_summary.tsv`.
+- Gets the exon coordinates, strand and chromosome of the gene from the `featurecounts/` files (`counts.txt` in `auto`; the reference sample's counts file in `track`).
+- Extracts every exon from the genome, reverse-complements them if the gene is on the `-` strand, and concatenates them in transcript order.
+
+When several genes are processed, a gene that cannot be found is skipped (and listed at the end) instead of stopping the run.
+
+### Outputs
+
+Written to `<results>/Find_genes/`, for each gene/junction:
+
+| File | Content |
+|------|---------|
+| `<gene>_j<N>_report.txt` | Human-readable report: chromosome, strand, coordinates, number of exons; primer (and probe) sequences, Tm and product size; amplicon sequence; every exon; the reconstructed mRNA. |
+| `<gene>_j<N>_for_align.txt` | Multi-FASTA to open in SeaView: `…_spliced_mRNA`, one `Exon_<i>_…` record per exon, `Amplicon_…`, `Left_primer_…`, `Right_primer_revcomp_…` and (with `--probe`) `Probe_…`. |
+
+The right primer is written **reverse-complemented**, so that every sequence of the file is in the same orientation as the mRNA and the amplicon and can be aligned directly.
+
+---
+
+## 10. Choosing and verifying primers by hand
+
+The automatic `Quality` flag, the primer report (§7) and `check` (§8) narrow the list down, but before ordering oligos it is worth looking at a few finalists yourself. Three independent checks are recommended: the junction placement (SeaView), the specificity (NCBI BLAST), and — optionally — the in-silico PCR of `check`.
+
+### Step 1 — Shortlist candidates
+
+Start from `primers_summary.tsv` (or `primer_report.html` in `track`). Typical criteria: `Quality` = `PASS_BEST` or `PASS`, a low `PRIMER_PAIR_0_PENALTY`, an amplicon size in your target window, similar primer Tm values, and — for `track` — a high enrichment. Note the `Gene` and `Junction` values of each finalist.
+
+### Step 2 — Extract the sequences
+
+```bash
+rapid fetch_gene -d results/ -g <gene> -j <junction>
+```
+
+(see §9). Open `<gene>_j<N>_report.txt` to get the amplicon and the exon sequences, and keep `<gene>_j<N>_for_align.txt` for step 4.
+
+### Step 3 — Check specificity with NCBI BLAST
+
+The goal is to make sure the pair amplifies **your gene only** — not a paralog, a homologous gene of the same family, or a sequence from the host or a closely related species that could be present in your sample.
+
+1. Go to [NCBI BLAST](https://blast.ncbi.nlm.nih.gov/Blast.cgi) and choose **Nucleotide BLAST** (`blastn`).
+2. **Amplicon (or spliced mRNA region):** paste the `Amplicon_Sequence` from the report. Restrict the search with the *Organism* box to your species first (is the target unique in its own genome/transcriptome?), then repeat with the organisms you want to exclude (host, related species, contaminants). Use the nucleotide collection or, if available for your organism, a RefSeq RNA / genome database.
+3. **Primers and probe:** they are too short for default BLAST parameters. Either choose the *short input* (`blastn-short`) program/option, or use NCBI **Primer-BLAST**, which takes the forward and reverse primers together and reports the products they could amplify in the database you choose.
+4. Read the result:
+   - the **target gene** must be the best hit, with ~100 % identity over the whole amplicon;
+   - any other hit with high identity on **both** primers and a plausible product size is a potential off-target;
+   - a primer that matches another sequence with a perfect 3′ end is more worrying than one with mismatches at its 3′ end.
+
+> A BLAST against the genome is also informative: if the amplicon aligns as one perfect, uninterrupted match, the sequence is probably intronless (or a processed pseudogene) and the pair would not discriminate mRNA from genomic DNA. A genuine junction-spanning amplicon is split by the intron on the genome. Step 4 checks the junction placement directly.
+
+*(Optional: add screenshots of a clean BLAST result here — `docs/images/blast_example.png`.)*
+
+### Step 4 — Check the junction placement in SeaView
+
+1. Open `<gene>_j<N>_for_align.txt` in SeaView (*File → Open*, FASTA format).
+2. Align the sequences (*Align → Align all*, default parameters). The exons are exact pieces of the spliced mRNA, so each one should line up with its own region of the mRNA row.
+3. Look at where the primers fall relative to the exon boundaries. The exon rows are consecutive in the mRNA: the end of `Exon_i` is immediately followed by the start of `Exon_i+1`, and that point is the junction.
+
+**What a good result looks like**
+
+- The amplicon row matches the mRNA row over its whole length, with no mismatch.
+- The primer that spans the junction is split across two exon rows: its 5′ part matches the end of `Exon_i`, its 3′ part matches the start of `Exon_i+1`. RAPID guarantees at least 4 nt of 3′ overlap into the next exon (§5).
+- Both primers (and the probe, if any) match the mRNA and amplicon rows with **no mismatch**, and the right primer (shown reverse-complemented) falls at the 3′ end of the amplicon.
+
+![Good alignment: the primer straddles the junction between two exons](docs/images/seaview_good_alignment.png)
+*A primer straddling an exon–exon junction: its bases are shared between the end of one exon and the beginning of the next.*
+
+**What should make you reject or re-check a pair**
+
+- A primer that lies **entirely inside one exon** while the pair is supposed to span a junction — it would also amplify genomic DNA. (Only one primer of the pair has to span the junction, but the `Left_/Right_bases_before/after_junction` columns of §5 should confirm that at least one does.)
+- Mismatches between a primer and the mRNA row.
+- A junction that does not correspond to an exon boundary in the alignment — usually a sign that the annotation differs from the one used for the design (§15).
+
+![Bad alignment: the primer lies inside a single exon](docs/images/seaview_bad_alignment.png)
+*A primer entirely within one exon: it does not discriminate mRNA from genomic DNA.*
+
+### Step 5 — Decide
+
+Keep the pairs that (i) straddle a junction in SeaView, (ii) hit only the intended gene in BLAST / Primer-BLAST, and (iii) are clean in `check` (§8) if you ran it. Only then order the oligos, and validate them experimentally (e.g. a no-RT control and a gDNA control).
+
+---
+
+## 11. Modes `install` and `clean`
 
 ```bash
 rapid install [--update-only] [--conda /path/to/conda]
@@ -284,7 +393,7 @@ Run `rapid clean` **only when no run is active** — it removes `.snakemake/` fr
 
 ---
 
-## 10. AGAT : GFF3 → GTF conversion and isoforme
+## 12. AGAT : GFF3 → GTF conversion and isoforme
 
 RAPID works best with GTF (reproducible splice sites + per-gene aggregation). If you have a GFF3 (e.g. from WormBase ParaSite), convert it in a **dedicated** environment:
 
@@ -307,15 +416,15 @@ You can complete only step 1 or 2, depending on your needs.
 
 ---
 
-## 11. Reproducibility
+## 13. Reproducibility
 
 With a **fixed GTF annotation**, RAPID is deterministic — the same inputs give the same primers, even across machines and different `--threads`. Two points:
 
-- **HISAT2** normally reuses splice sites discovered on the fly, which makes multi-threaded runs slightly non-deterministic. RAPID avoids this by extracting the known splice sites from the annotation and passing `--known-splicesite-infile … --no-temp-splicesite`. This is applied for **GTF** annotations only (the extraction script reads GTF). With GFF3, convert to GTF (§10) for reproducible alignment.
+- **HISAT2** normally reuses splice sites discovered on the fly, which makes multi-threaded runs slightly non-deterministic. RAPID avoids this by extracting the known splice sites from the annotation and passing `--known-splicesite-infile … --no-temp-splicesite`. This is applied for **GTF** annotations only (the extraction script reads GTF). With GFF3, convert to GTF (§12) for reproducible alignment.
 
 ---
 
-## 12. Running several analyses at once
+## 14. Running several analyses at once
 
 `rapid` launches Snakemake in the **current working directory**, so Snakemake's lock lives in `./.snakemake/`. Two runs started from the **same** directory will clash on that lock even if their `-o` differ. To run in parallel:
 
@@ -329,11 +438,11 @@ On a cluster with a scheduler (e.g. SLURM), each job already runs in its own wor
 
 ---
 
-## 13. Troubleshooting
+## 15. Troubleshooting
 
 **`hisat2-build`/`bedtools` fail on the genome** — the genome is still gzipped. Decompress it: `gunzip -k genome.fa.gz`.
 
-**featureCounts: "failed to find the gene identifier attribute … 'gene_id'"** — your GTF has no `gene_id` on exons (common after some GFF3 conversions). Reconvert with AGAT (§10), then re-run after `rapid clean`.
+**featureCounts: "failed to find the gene identifier attribute … 'gene_id'"** — your GTF has no `gene_id` on exons (common after some GFF3 conversions). Reconvert with AGAT (§12), then re-run after `rapid clean`.
 
 **`track` keeps 0 genes** — the filter is too strict. In `absolute` mode raise `--other-max-count`; better, switch to `--filter cpm` and pick `--fold-change` with `track_cpm_scan.py` (§6).
 
@@ -341,13 +450,13 @@ On a cluster with a scheduler (e.g. SLURM), each job already runs in its own wor
 
 **Empty `SEQUENCE_TEMPLATE` / Primer3 "SEQUENCE_OVERLAP_JUNCTION_LIST beyond end of sequence"** — this was a gene-name parsing issue with underscore/colon gene IDs; the current scripts handle it. Make sure you are running the up-to-date `01_expression_filter_and_primer3_prep.R` and `common.smk`.
 
-**Two runs give slightly different counts** — see §11 (HISAT2 splice-site determinism; use a GTF).
+**Two runs give slightly different counts** — see §13 (HISAT2 splice-site determinism; use a GTF).
 
 **Results differ from a published primer set for the same gene** — RAPID is indexed on the annotation you provide, and it only designs across junctions. A published intra-exonic primer, or one based on a different annotation version, will not be reproduced. Use the same annotation version to compare, or accept RAPID's junction-based design.
 
 ---
 
-## 14. Output reference
+## 16. Output reference
 
 ```
 results/
@@ -377,6 +486,9 @@ results/
 │       ├── primer_report.tsv        (track) enriched metrics + per-stage CPM
 │       └── primer_report.html       (track) interactive selection page
 ├── logs/                            per-rule logs
+├── Find_genes/                      (fetch_gene mode)
+│   ├── <gene>_j<N>_report.txt       exons, mRNA, amplicon, primers
+│   └── <gene>_j<N>_for_align.txt    multi-FASTA for SeaView
 └── check/                           (check mode)
     ├── ipcress_raw/<db>.txt
     ├── ipcress_raw_combined.txt
@@ -388,7 +500,7 @@ results/
 
 ---
 
-## 15. Tools & citation
+## 17. Tools & citation
 
 RAPID orchestrates: HISAT2, SAMtools, Subread/featureCounts, DESeq2, BEDTools, Primer3, GNU Parallel, exonerate (ipcress), and folium, via Snakemake. Please cite these tools and RAPID itself.
 

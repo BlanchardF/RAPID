@@ -70,7 +70,8 @@ git clone https://github.com/BlanchardF/RAPID.git Rapid
 # export PATH="/path/to/Rapid/git/clone/Rapid/bin:$PATH"
 # source /.bashrc
 
-cd Rapid
+chmod +x /path/to/Rapid/bin/rapid
+
 rapid install          # or: python rapid.py install
 conda activate rapid
 ```

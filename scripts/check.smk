@@ -128,7 +128,9 @@ rule split_by_pair:
 # STEP 5 — Cross-pair species report (matrix TSV + interactive HTML explorer)
 # =============================================================================
 rule check_species_report:
-    input:  marker = f"{OUT}/per_pair/.split_done"
+    input:
+        marker     = f"{OUT}/per_pair/.split_done",
+        ipcress_in = f"{OUT}/primers.ipcress",   # full list of tested pairs
     output:
         tsv  = f"{OUT}/species_by_pair.tsv",
         html = f"{OUT}/species_explorer.html",
@@ -138,7 +140,7 @@ rule check_species_report:
         script       = str(SCRIPTS_DIR / "check_species_report.py"),
     shell:
         """
-        python3 {params.script} {params.per_pair_dir} {output.tsv} {output.html} &> {log}
+        python3 {params.script} {params.per_pair_dir} {output.tsv} {output.html} {input.ipcress_in} &> {log}
         cat {log}
         """
 

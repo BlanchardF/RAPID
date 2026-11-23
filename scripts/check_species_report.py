@@ -57,6 +57,26 @@ def parse_combined_file(text):
     return {pid: dict(spd) for pid, spd in pairs.items()}
 
 
+def load_all_pair_ids(ipcress_in):
+    """Return the ordered list of every pair ID tested (1st column of the
+    ipcress input file). ipcress only emits an 'Experiment:' block for pairs
+    with >=1 hit, so this is the only way to know about pairs with no result."""
+    ids = []
+    p = Path(ipcress_in)
+    if not p.is_file():
+        print(f"[check_species_report] WARNING: ipcress input not found: {p} "
+              "(pairs without any amplification will be missing)", file=sys.stderr)
+        return ids
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        pid = line.split("\t")[0].strip()
+        if pid and pid not in ids:
+            ids.append(pid)
+    return ids
+
+
 def load_pairs(input_path):
     """Return {pair_id: {species: count}} from a directory or a combined file."""
     p = Path(input_path)
@@ -150,6 +170,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .pair-id { font-weight: 600; }
   .badge { margin-left: auto; font-size: 12px; padding: 2px 9px; border-radius: 999px;
            background: var(--chip); border: 1px solid var(--line); }
+  .pair.noamp { border-style: dashed; opacity: .85; }
+  .badge.noamp { color: var(--warn); border-color: var(--warn); }
   .badge.match { background: var(--good); color: #04220f; border-color: var(--good); font-weight: 700; }
   .chips { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--chip);
@@ -311,6 +333,7 @@ function renderPairs() {
   document.getElementById('stats').innerHTML =
     `<span class="stat"><b>${pids.length}</b> pairs</span>
      <span class="stat"><b>${DATA.species.length}</b> species total</span>
+     <span class="stat"><b style="color:var(--warn)">${rows.filter(r => r.all === 0).length}</b> pair(s) with no amplification</span>
      <span class="stat"><b style="color:var(--good)">${nMatch}</b> pair(s) amplifying a checked species</span>
      <span class="stat"><b style="color:var(--accent)">${checkedPairs.size}</b> pair(s) selected for export</span>`;
 
@@ -321,11 +344,13 @@ function renderPairs() {
       const sel = selected.has(sp) ? ' selected' : '';
       return `<span class="chip${sel}">${sp} <span class="count-tag">x${DATA.pairs[r.pid][sp]}</span></span>`;
     }).join('');
-    const cls = r.n > 0 ? 'pair match' : 'pair';
+    const noAmp = r.all === 0;
+    const cls = r.n > 0 ? 'pair match' : (noAmp ? 'pair noamp' : 'pair');
     const badge = r.n > 0 ? `<span class="badge match">${r.n} checked species</span>`
-                          : '<span class="badge">no match</span>';
+                          : (noAmp ? '<span class="badge noamp">no amplification</span>'
+                                   : '<span class="badge">no match</span>');
     const chipsHtml = chips ? `<div class="chips">${chips}</div>`
-                            : `<div class="chips"><span class="muted">no species detected</span></div>`;
+                            : `<div class="chips"><span class="muted">no amplification (no species detected)</span></div>`;
     const pairChecked = checkedPairs.has(r.pid) ? 'checked' : '';
     return `<div class="${cls}">
       <div class="pair-head">
@@ -361,22 +386,30 @@ def write_html(pairs, all_species, out_html):
 # ---------------------------------------------------------------------------
 
 def main():
-    if len(sys.argv) not in (3, 4):
-        print(f"Usage: {sys.argv[0]} <input_dir_or_file> <out_tsv> [out_html]",
+    if len(sys.argv) not in (3, 4, 5):
+        print(f"Usage: {sys.argv[0]} <input_dir_or_file> <out_tsv> [out_html] [primers.ipcress]",
               file=sys.stderr)
-        print("  out_html defaults to 'species_explorer.html' if omitted.",
+        print("  out_html defaults to 'species_explorer.html' if omitted.\n"
+              "  primers.ipcress (optional): lists ALL tested pairs so that pairs\n"
+              "  with no amplification still appear in the outputs.",
               file=sys.stderr)
         sys.exit(1)
     input_path, out_tsv = sys.argv[1:3]
-    out_html = sys.argv[3] if len(sys.argv) == 4 else "species_explorer.html"
+    out_html = sys.argv[3] if len(sys.argv) >= 4 else "species_explorer.html"
+    ipcress_in = sys.argv[4] if len(sys.argv) == 5 else None
 
     pairs = load_pairs(input_path)
+    n_with_hits = len(pairs)
+    if ipcress_in:
+        for pid in load_all_pair_ids(ipcress_in):
+            pairs.setdefault(pid, {})
     all_species = sorted({sp for spd in pairs.values() for sp in spd})
 
     write_matrix_tsv(pairs, all_species, out_tsv)
     write_html(pairs, all_species, out_html)
 
-    print(f"[check_species_report] pairs   : {len(pairs)}", file=sys.stderr)
+    print(f"[check_species_report] pairs   : {len(pairs)} "
+          f"({len(pairs) - n_with_hits} without amplification)", file=sys.stderr)
     print(f"[check_species_report] species : {len(all_species)}", file=sys.stderr)
     print(f"[check_species_report] matrix  -> {out_tsv}", file=sys.stderr)
     print(f"[check_species_report] explorer-> {out_html}", file=sys.stderr)
